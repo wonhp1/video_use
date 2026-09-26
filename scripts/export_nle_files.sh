@@ -15,9 +15,11 @@
 #   bash scripts/export_nle_files.sh path/to/edl.json  # 다른 EDL 지정
 
 set -euo pipefail
+export PYTHONUTF8=1  # Windows cp949 콘솔에서 한글·특수문자 출력 오류 방지
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV="$HOME/Developer/video-use/.venv/bin/python"
+VU_DIR="$REPO/.claude/skills/video-use"
+if [ -x "$VU_DIR/.venv/Scripts/python.exe" ]; then VENV="$VU_DIR/.venv/Scripts/python.exe"; else VENV="$VU_DIR/.venv/bin/python"; fi
 HELPERS="$REPO/.claude/skills/motion-pipeline/helpers"
 
 EDL="${1:-$REPO/footage/edit/edl.json}"

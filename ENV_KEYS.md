@@ -27,7 +27,7 @@
 
 ### 설정 위치
 
-`~/Developer/video-use/.env`:
+`.claude/skills/video-use/.env`:
 
 ```
 ELEVENLABS_API_KEY=sk_...
@@ -36,7 +36,7 @@ ELEVENLABS_API_KEY=sk_...
 ### 확인
 
 ```bash
-grep -E '^ELEVENLABS_API_KEY=.+' ~/Developer/video-use/.env && echo OK || echo "키 없음 — Whisper 폴백"
+grep -E '^ELEVENLABS_API_KEY=.+' .claude/skills/video-use/.env && echo OK || echo "키 없음 — Whisper 폴백"
 ```
 
 키가 없거나 비어있으면 Mode A는 자동으로 `npx hyperframes transcribe` (로컬 Whisper)로 폴백됩니다.
