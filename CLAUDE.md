@@ -8,9 +8,9 @@
 
 사용자가 작업을 요청하기 전에:
 
-1. `~/Developer/video-use` 가 존재하지 않으면 → "셋업이 필요합니다. `bash scripts/setup.sh` 를 실행해 주세요" 안내.
+1. `.claude/skills/video-use` 가 존재하지 않으면 → "셋업이 필요합니다. `bash scripts/setup.sh` 를 실행해 주세요" 안내.
 2. `.claude/skills/video-use` 심볼릭이 깨졌으면 → setup.sh 재실행 권장.
-3. `~/Developer/video-use/.venv/bin/python -c "import edge_tts"` 실패하면 → setup.sh 재실행.
+3. `.claude/skills/video-use/.venv/Scripts/python.exe -c "import edge_tts"` 실패하면 → setup.sh 재실행.
 
 setup.sh는 멱등이라 여러 번 실행해도 안전합니다.
 
@@ -39,11 +39,12 @@ setup.sh는 멱등이라 여러 번 실행해도 안전합니다.
 
 기본 워크플로우는 **API 키 0개, 비용 0**:
 
-- hyperframes Whisper(`npx hyperframes transcribe`) — 로컬, 무료
+- hyperframes Whisper(`npx hyperframes transcribe`) — 로컬, 무료. **whisper-cpp 필요** (Windows 기본 미설치)
+- faster-whisper(`helpers/transcribe_local.py`) — 로컬, 무료. whisper-cpp 없을 때 대체 (setup.sh가 설치)
 - Edge TTS — Microsoft 공개, 무료
 - ffmpeg — 로컬
 
-ElevenLabs Scribe는 **다중 화자 분리 / 한국어 필러 자동컷이 핵심**일 때만 선택. `~/Developer/video-use/.env` 에 키 입력.
+ElevenLabs Scribe는 **다중 화자 분리 / 한국어 필러 자동컷이 핵심**일 때만 선택. `.claude/skills/video-use/.env` 에 키 입력.
 
 ## 자주 묻는 패턴
 
@@ -63,6 +64,16 @@ ElevenLabs Scribe는 **다중 화자 분리 / 한국어 필러 자동컷이 핵�
 
 hyperframes Whisper large-v3 모델(~3GB) 첫 다운로드 중. 5–15분 정도 걸림. 진행 표시 없을 수 있음 — 사용자에게 미리 알려주기.
 
+반대로 **즉시 끝났는데 출력이 `{"ok":false,"skipped":true,"reason":"whisper_unavailable"}`** 이면 whisper-cpp 미설치. faster-whisper로 대체:
+
+```bash
+.claude/skills/video-use/.venv/Scripts/python.exe \
+  .claude/skills/motion-pipeline/helpers/transcribe_local.py \
+  footage/<영상>.mp4 -o footage/edit/transcripts/<영상>.json
+```
+
+Scribe 호환 word JSON이 바로 나오므로 `pack_transcripts.py`에 그대로 입력. 기본 모델 large-v3-turbo(~1.6GB, 첫 실행 시 다운로드).
+
 ### Mode A에서 EDL → FCPXML 만들기 전 source 영상 점검 (필수)
 
 FCP가 "각각의 미디어가 없는 유효하지 않은 편집입니다"를 뱉는 가장 흔한 3원인을 EDL 작성 **전**에 미리 회피한다:
@@ -72,9 +83,9 @@ FCP가 "각각의 미디어가 없는 유효하지 않은 편집입니다"를 �
 2. **한글 경로 + timecode 동시 회피** — DJI/GoPro 같은 장비는 0이 아닌 timecode(`07:26:28;00` 등)를 박음. 그리고 macOS는 한글 파일명을 NFD로 저장. 두 문제를 한 번에:
 
    ```bash
-   mkdir -p /tmp/bidiouse
+   mkdir -p C:/Temp/bidiouse
    ffmpeg -y -i footage/<원본>.MP4 -c copy -map_metadata -1 \
-     -timecode 00:00:00:00 /tmp/bidiouse/source.MP4
+     -timecode 00:00:00:00 C:/Temp/bidiouse/source.MP4
    ```
 
    이 사본의 절대경로를 EDL의 `sources[0].path`로 사용. stream copy라 영상 무손실, 1분 내.
@@ -98,12 +109,12 @@ FCP가 "각각의 미디어가 없는 유효하지 않은 편집입니다"를 �
 
 1. `footage/edit/subtitles.srt` 존재 확인. 없으면 먼저 export:
    ```bash
-   ~/Developer/video-use/.venv/bin/python \
+   .claude/skills/video-use/.venv/Scripts/python.exe \
      .claude/skills/motion-pipeline/helpers/subtitles_to_srt.py \
      export footage/edit/subtitles.json -o footage/edit/subtitles.srt
    ```
 2. 사용자 요청 반영해서 SRT 수정 (Edit/Write 도구로)
-3. `bash scripts/rerender_subtitles.sh` 실행 — 6단계 자동 (5–15분, 4K mov 렌더 포함)
+3. `bash scripts/rerender_subtitles.sh` 실행 — 6단계 자동 (EDL 해상도로 mov 렌더, 4K 기준 5–15분)
 4. 완료되면 사용자에게 "NLE에서 timeline.{fcpxml|xml} 다시 import" 안내
 
 **렌더 없이 검증만**: `bash scripts/rerender_subtitles.sh --lint-only` (5초)
@@ -137,7 +148,7 @@ FCP가 "각각의 미디어가 없는 유효하지 않은 편집입니다"를 �
 - **V2 overlay**: 인포그래픽 mov (디자인된 자막, 정중앙)
 - **Caption track / SRT**: NLE 자체 자막 (단순 텍스트, 하단 중앙, 편집 가능)
 
-EDL의 `overlays`(mov 16개) + `subtitles`(텍스트 51개) 둘 다 채우면 양쪽 다 들어감. 이미 `update_edl_overlays.py`와 `subtitles_to_srt.py`로 자동 처리.
+EDL의 `overlays`(cut별 mov) + `subtitles`(자막 텍스트) 둘 다 채우면 양쪽 다 들어감. 이미 `update_edl_overlays.py`와 `subtitles_to_srt.py`로 자동 처리.
 
 화면에 둘 다 보이는 게 부담스러우면 사용자가 NLE에서 V2 트랙 비활성화 또는 caption 트랙 비활성화로 선택 가능.
 

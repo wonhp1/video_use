@@ -98,7 +98,7 @@ motion-pipeline 스킬이 자동 트리거되어 다음을 수행:
 
 ```bash
 # 내레이션만 따로 생성
-~/Developer/video-use/.venv/bin/python \
+.claude/skills/video-use/.venv/Scripts/python.exe \
   .claude/skills/motion-pipeline/helpers/batch_tts.py \
   footage/edit/segments.json -o footage/edit/narration/
 
@@ -109,7 +109,7 @@ for f in footage/edit/narration/*.mp3; do
 done
 
 # EDL → FCPXML 변환만
-~/Developer/video-use/.venv/bin/python \
+.claude/skills/video-use/.venv/Scripts/python.exe \
   .claude/skills/motion-pipeline/helpers/edl_to_fcpxml.py \
   footage/edit/edl.json -o footage/edit/timeline.fcpxml
 ```
@@ -137,8 +137,9 @@ footage 영상으로 인터뷰 영상 만들어줘.
 
 motion-pipeline 스킬이 자동 수행:
 
-1. **트랜스크립션** — `npx hyperframes transcribe <video> --language ko --model large-v3` (무료 로컬 Whisper)
-   - ElevenLabs Scribe 사용 시: `~/Developer/video-use/.env`의 `ELEVENLABS_API_KEY` 채우면 자동 폴백
+1. **트랜스크립션** — `npx hyperframes transcribe <video> --language ko --model large-v3` (무료 로컬 Whisper, whisper-cpp 필요)
+   - whisper-cpp가 없으면(Windows 기본) `helpers/transcribe_local.py`(faster-whisper, 무료 로컬)로 자동 대체
+   - ElevenLabs Scribe 사용 시: `.claude/skills/video-use/.env`의 `ELEVENLABS_API_KEY` 채우면 자동 폴백
 2. **takes_packed.md 생성** — video-use가 트랜스크립트를 phrase 단위로 정리
 3. **컷 전략 평문 제시 → 사용자 승인 대기** ⚠️ **이 단계가 핵심.** 자동 진행 안 함.
 4. **자동 컷 검출** (사용자 승인 후):
@@ -155,12 +156,17 @@ motion-pipeline 스킬이 자동 수행:
 ### 수동 명령어 (필요 시)
 
 ```bash
-# 트랜스크립션만 (무료)
+# 트랜스크립션만 (무료, whisper-cpp 필요)
 npx hyperframes transcribe footage/clip1.mp4 --json --language ko --model large-v3
 
+# 트랜스크립션만 (무료, whisper-cpp 없을 때 — faster-whisper, Scribe 형식 출력)
+.claude/skills/video-use/.venv/Scripts/python.exe \
+  .claude/skills/motion-pipeline/helpers/transcribe_local.py \
+  footage/clip1.mp4 -o footage/edit/transcripts/clip1.json
+
 # 트랜스크립션 (ElevenLabs Scribe — 다중 화자 분리 / 한국어 필러 보존)
-~/Developer/video-use/.venv/bin/python \
-  ~/Developer/video-use/helpers/transcribe.py footage/clip1.mp4
+.claude/skills/video-use/.venv/Scripts/python.exe \
+  .claude/skills/video-use/helpers/transcribe.py footage/clip1.mp4
 
 # 무음 검출만
 ffmpeg -nostdin -hide_banner -i footage/clip1.mp4 \
@@ -182,14 +188,14 @@ npx hyperframes init lower-third --example blank --tailwind --resolution 1080p
 cd hyperframes/lower-third
 npm run dev
 
-# 검증 (lint + validate + inspect)
+# 검증 (lint + runtime + layout + motion + contrast)
 npm run check
 
 # 렌더 — mp4
 npm run render
 
 # 렌더 — mov 알파(Final Cut Pro용)
-npx hyperframes render --format mov --codec prores4444 -o output/lower-third.mov
+npx hyperframes render --format mov -o output/lower-third.mov   # ProRes 4444 알파 자동
 
 # 레지스트리 블록 추가 (50+ 사전 제작 컴포넌트)
 npx hyperframes catalog
@@ -285,7 +291,7 @@ bash scripts/export_nle_files.sh
 bash scripts/setup.sh
 ```
 
-멱등이라 안전. video-use 업데이트(`cd ~/Developer/video-use && git pull`) 후에도 다시 실행하면 됩니다.
+멱등이라 안전. video-use 업데이트(`cd .claude/skills/video-use && git pull`) 후에도 다시 실행하면 됩니다.
 
 ---
 
@@ -367,6 +373,16 @@ bash scripts/setup.sh   # 이 repo 루트에서 실행 — venv에 edge-tts 복�
 
 모델 다운로드 중. 진행 표시가 없을 수 있으니 5–15분 기다려봅니다. 한 번 받으면 캐시.
 
+### `npx hyperframes transcribe`가 즉시 `whisper_unavailable`
+
+whisper-cpp 바이너리가 PATH에 없음 (Windows 기본). `npx hyperframes doctor`에서 `✗ whisper-cpp`로 확인됨. 빌드 대신 setup.sh가 설치한 faster-whisper 사용:
+
+```bash
+.claude/skills/video-use/.venv/Scripts/python.exe \
+  .claude/skills/motion-pipeline/helpers/transcribe_local.py \
+  footage/clip1.mp4 -o footage/edit/transcripts/clip1.json
+```
+
 ### `ffmpeg silencedetect`가 결과를 안 줌
 
 `-30dB`가 너무 엄격할 수 있음. `-40dB`로 낮춰보거나 `d=0.3`으로 짧은 무음도 허용.
@@ -395,10 +411,10 @@ Final Cut Pro의 _"Invalid edit with no corresponding media"_. 16개 클립 모�
 
 ```bash
 # timecode 0으로 리셋 + 영문 임시 경로 사본 (stream copy, 1분 내)
-mkdir -p /tmp/bidiouse
+mkdir -p C:/Temp/bidiouse
 ffmpeg -y -i footage/원본.MP4 -c copy -map_metadata -1 \
-  -timecode 00:00:00:00 /tmp/bidiouse/source.MP4
-# EDL의 sources[0].path를 /tmp/bidiouse/source.MP4 로 갱신 후 FCPXML 재생성
+  -timecode 00:00:00:00 C:/Temp/bidiouse/source.MP4
+# EDL의 sources[0].path를 C:/Temp/bidiouse/source.MP4 로 갱신 후 FCPXML 재생성
 ```
 
 확인:

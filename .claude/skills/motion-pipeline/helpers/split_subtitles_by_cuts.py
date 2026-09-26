@@ -2,7 +2,7 @@
 """
 split_subtitles_by_cuts.py — 통합 자막 mov를 cut별 mov로 분할.
 
-EDL의 cut 16개 timeline 좌표 범위에 맞춰 자막 mov를 N개로 stream copy 분할.
+EDL의 cut별 timeline 좌표 범위에 맞춰 자막 mov를 N개로 stream copy 분할.
 ProRes 4444는 intra-frame 코덱이라 stream copy 가능 (~10초).
 
 Usage:

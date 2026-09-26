@@ -3,8 +3,8 @@
 #
 # 흐름:
 #   1. footage/edit/subtitles.srt → subtitles.json (텍스트 갱신)
-#   2. subtitles.json → hyperframes/index.html (caption clip 재생성)
-#   3. lint + render → hyperframes/renders/subtitles.mov (4K alpha)
+#   2. subtitles.json → hyperframes/index.html (caption clip 재생성, EDL width/height 해상도)
+#   3. lint + render → hyperframes/renders/subtitles.mov (EDL 해상도, ProRes 4444 alpha)
 #   4. mov를 cut별로 분할 → hyperframes/renders/cuts/
 #   5. EDL의 overlays 갱신
 #   6. 양 NLE 파일 재생성 → timeline.fcpxml + timeline.xml
@@ -16,11 +16,18 @@
 #
 # 변경한 파일을 미리 확인 (lint만):
 #   bash scripts/rerender_subtitles.sh --lint-only
+#
+# hyperframes 버전: HF_VERSION 환경변수로 교체 가능 (기본은 아래 검증된 버전)
+#   HF_VERSION=latest bash scripts/rerender_subtitles.sh
 
 set -euo pipefail
+export PYTHONUTF8=1  # Windows cp949 콘솔에서 한글·특수문자 출력 오류 방지
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV="$HOME/Developer/video-use/.venv/bin/python"
+VU_DIR="$REPO/.claude/skills/video-use"
+if [ -x "$VU_DIR/.venv/Scripts/python.exe" ]; then VENV="$VU_DIR/.venv/Scripts/python.exe"; else VENV="$VU_DIR/.venv/bin/python"; fi
+HF_VERSION="${HF_VERSION:-0.8.78}"
+HF="hyperframes@$HF_VERSION"
 LINT_ONLY=0
 [ "${1:-}" = "--lint-only" ] && LINT_ONLY=1
 
@@ -52,24 +59,25 @@ step "1. SRT → subtitles.json"
 step "2. subtitles.json → hyperframes/index.html"
 "$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/build_subtitle_html.py" \
   "$REPO/footage/edit/subtitles.json" \
-  -o "$REPO/hyperframes/index.html"
+  -o "$REPO/hyperframes/index.html" \
+  --edl "$REPO/footage/edit/edl.json"
 
-step "3. hyperframes lint + validate"
-(cd "$REPO/hyperframes" && npx --yes hyperframes@0.5.5 lint 2>&1 | tail -3)
+step "3. hyperframes lint ($HF)"
+(cd "$REPO/hyperframes" && npx --yes "$HF" lint 2>&1 | tail -3)
 
 if [ "$LINT_ONLY" = "1" ]; then
   ok "lint-only 모드 — 렌더 건너뜀"
   exit 0
 fi
 
-step "4. 알파 mov 렌더 (4K, 5–15분 예상)"
+step "3. 알파 mov 렌더 (EDL 해상도, 4K 기준 5–15분 예상)"
 mkdir -p "$REPO/hyperframes/renders"
 (cd "$REPO/hyperframes" && \
-  npx --yes hyperframes@0.5.5 render --format mov \
+  npx --yes "$HF" render --format mov \
     -o renders/subtitles.mov --quality high)
 ok "$(ls -lh "$REPO/hyperframes/renders/subtitles.mov" | awk '{print $5}') hyperframes/renders/subtitles.mov"
 
-step "5. mov를 16개 cut 별로 분할"
+step "4. mov를 EDL cut 별로 분할"
 "$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/split_subtitles_by_cuts.py" \
   "$REPO/footage/edit/edl.json" \
   "$REPO/hyperframes/renders/subtitles.mov" \

@@ -7,7 +7,7 @@ description: video-use(컷 편집·자막·컬러)와 hyperframes(HTML→비디�
 
 이 스킬은 두 도구를 결합한다:
 
-- **video-use** — `.claude/skills/video-use` (`~/Developer/video-use`로 심볼릭). 트랜스크립트 기반 컷, ffmpeg 합성, 자막 번인. Hard Rules는 video-use의 [SKILL.md](../video-use/SKILL.md)에 있음 — 그게 진리다.
+- **video-use** — `.claude/skills/video-use` (`.claude/skills/video-use`로 심볼릭). 트랜스크립트 기반 컷, ffmpeg 합성, 자막 번인. Hard Rules는 video-use의 [SKILL.md](../video-use/SKILL.md)에 있음 — 그게 진리다.
 - **hyperframes** — `./hyperframes/`. HTML/CSS/GSAP/Lottie/Three.js 합성물 → 결정론적 mp4/mov 렌더. 추가로 `transcribe`(로컬 Whisper) 서브커맨드 내장.
 
 video-use SKILL.md의 Hard Rules는 **무조건** 따른다. 이 파일은 두 도구의 결합 방식과 프로젝트 컨벤션만 다룬다.
@@ -51,7 +51,7 @@ video-use SKILL.md의 Hard Rules는 **무조건** 따른다. 이 파일은 두 �
 ## Mode A — 풋티지 편집
 
 1. 사용자가 `./footage/`에 클립을 넣는다.
-2. **트랜스크립션**: 기본 `npx hyperframes transcribe <file> --json --language ko --model large-v3` 사용. ElevenLabs Scribe가 필요하면 `~/Developer/video-use/.env`의 `ELEVENLABS_API_KEY` 채우고 `~/Developer/video-use/.venv/bin/python ~/Developer/video-use/helpers/transcribe.py <file>`. **Whisper 출력을 Scribe 호환 JSON 형식(words[].{type,text,start,end,speaker_id})으로 어댑트해서** video-use helpers에 입력.
+2. **트랜스크립션**: 기본 `npx hyperframes transcribe <file> --json --language ko --model large-v3` 사용. whisper-cpp가 없으면(`{"ok":false,"reason":"whisper_unavailable"}` — Windows 기본) `helpers/transcribe_local.py <file> -o footage/edit/transcripts/<name>.json`(faster-whisper, setup.sh가 설치)로 대체 — Scribe 형식을 바로 출력하므로 어댑트 불필요. ElevenLabs Scribe가 필요하면 `.claude/skills/video-use/.env`의 `ELEVENLABS_API_KEY` 채우고 `.claude/skills/video-use/.venv/Scripts/python.exe .claude/skills/video-use/helpers/transcribe.py <file>`. **Whisper 출력을 Scribe 호환 JSON 형식(words[].{type,text,start,end,speaker_id})으로 어댑트해서** video-use helpers에 입력.
 3. video-use가 `takes_packed.md`를 만들고 컷 전략을 평문으로 제시 → **사용자 승인 대기**.
 4. 모션그래픽 오버레이를 병렬 sub-agent로 렌더 (아래 [모션그래픽](#모션그래픽-공통) 참조).
 5. `./footage/edit/edl.json` 작성.
@@ -80,8 +80,8 @@ EDL → FCPXML 단계는 **세 가지 source 메타데이터에 민감**하다. 
 2. **한글 경로** — macOS는 NFD로 저장. helper가 NFC로 자동 normalize하지만, FCP가 그래도 거부하면 영문 임시 경로로 사본:
 
    ```bash
-   mkdir -p /tmp/bidiouse && cp footage/한글영상.MP4 /tmp/bidiouse/source.MP4
-   # EDL의 sources[0].path를 /tmp/bidiouse/source.MP4로 갱신
+   mkdir -p C:/Temp/bidiouse && cp footage/한글영상.MP4 C:/Temp/bidiouse/source.MP4
+   # EDL의 sources[0].path를 C:/Temp/bidiouse/source.MP4로 갱신
    ```
 
 3. **timecode 메타데이터** — DJI/GoPro/일부 카메라는 0이 아닌 timecode(`07:26:28;00` 등)를 박음. FCP가 source 좌표계로 해석하면 우리 0초 기준 EDL과 mismatch:
@@ -92,7 +92,7 @@ EDL → FCPXML 단계는 **세 가지 source 메타데이터에 민감**하다. 
    `00:00:00:00`이 아니면 strip:
    ```bash
    ffmpeg -y -i footage/원본.MP4 -c copy -map_metadata -1 \
-     -timecode 00:00:00:00 /tmp/bidiouse/source.MP4
+     -timecode 00:00:00:00 C:/Temp/bidiouse/source.MP4
    # EDL path 갱신
    ```
    stream copy라 영상 픽셀은 무손실, 1분 내 완료.
@@ -131,7 +131,7 @@ per-segment 오버라이드가 top-level 기본값보다 우선.
 1. **스크립트 파싱** → `./footage/edit/segments.json`.
 2. **Edge TTS 내레이션 일괄 생성** (병렬):
    ```bash
-   ~/Developer/video-use/.venv/bin/python \
+   .claude/skills/video-use/.venv/Scripts/python.exe \
      .claude/skills/motion-pipeline/helpers/batch_tts.py \
      ./footage/edit/segments.json \
      -o ./footage/edit/narration/
@@ -147,7 +147,7 @@ per-segment 오버라이드가 top-level 기본값보다 우선.
 4. **hyperframes 합성물 병렬 작성** — segment마다 또는 Set 단위로 하나씩. 각 sub-agent(Agent tool, `general-purpose`):
    - `cd hyperframes/<segment-id> && npx hyperframes init` (최초 1회)
    - `index.html`을 GSAP/CSS 애니메이션으로 작성 — **3단계의 word-level timestamps에 맞춰** 등장/소멸 타이밍 결정
-   - 두 포맷 모두 렌더: `--format mov --codec prores4444 -o output/<id>.mov`(FCP 알파) + `-o output/<id>.mp4`(ffmpeg 번인용)
+   - 두 포맷 모두 렌더: `--format mov -o output/<id>.mov`(ProRes 4444 알파 자동, FCP) + `-o output/<id>.mp4`(ffmpeg 번인용)
 5. **`./footage/edit/edl.json`** 작성 — segment별 mp3가 source, hyperframes 렌더가 overlay(전체 segment 길이를 덮음).
 6. **ffmpeg concat**으로 모든 segment 렌더 → `final.mp4`. 오디오는 내레이션 mp3들을 순서대로.
 7. EDL → 양 NLE 파일 export (`bash scripts/export_nle_files.sh`) → `timeline.fcpxml` + `timeline.xml`.
@@ -184,7 +184,7 @@ per-segment 오버라이드가 top-level 기본값보다 우선.
    없으면 helpers/subtitles_to_srt.py 로 subtitles.json → SRT 먼저 export
 2. 사용자 요청 반영 (SRT 수정)
 3. bash scripts/rerender_subtitles.sh 실행
-   → SRT → JSON → index.html → 4K alpha mov 렌더 (5–15분)
+   → SRT → JSON → index.html(EDL width/height 해상도) → alpha mov 렌더 (4K 기준 5–15분)
    → cut별 mov 분할 → EDL overlays 갱신
    → timeline.fcpxml + timeline.xml 동시 export
 4. 완료 후 사용자에게 "NLE에서 timeline.{fcpxml|xml} 다시 import" 안내
@@ -200,7 +200,7 @@ per-segment 오버라이드가 top-level 기본값보다 우선.
 
 ### 하이브리드 자막 (인포그래픽 + caption track 동시)
 
-NLE 안 텍스트 편집 인터페이스를 살리려면 EDL의 `overlays`(인포그래픽 mov 16개)와 `subtitles`(텍스트 51개)를 **둘 다** 채운다. 양 NLE 파일에 두 종류 자막이 모두 들어감:
+NLE 안 텍스트 편집 인터페이스를 살리려면 EDL의 `overlays`(cut별 인포그래픽 mov)와 `subtitles`(자막 텍스트)를 **둘 다** 채운다. 양 NLE 파일에 두 종류 자막이 모두 들어감:
 
 | 자막 종류                        | 위치      | 디자인                   | NLE 안 편집                                      |
 | -------------------------------- | --------- | ------------------------ | ------------------------------------------------ |
@@ -210,7 +210,7 @@ NLE 안 텍스트 편집 인터페이스를 살리려면 EDL의 `overlays`(인�
 EDL에 두 필드 같이 채우는 방식 (재렌더 후 또는 수동):
 
 ```python
-edl["overlays"] = [...]   # 인포그래픽 mov 16개 (update_edl_overlays.py가 자동)
+edl["overlays"] = [...]   # cut별 인포그래픽 mov (update_edl_overlays.py가 자동)
 edl["subtitles"] = [
     {"start": p["start"], "end": p["end"], "text": p["text"]}
     for p in subtitles_json
@@ -236,9 +236,10 @@ edl["subtitles"] = [
 
 - 병렬 sub-agent (Agent tool, `general-purpose`).
 - `cd hyperframes/<name> && npx hyperframes init`(최초) → HTML+CSS+GSAP 작성 → 두 포맷 렌더:
-  - `npx hyperframes render --format mov --codec prores4444 -o output/<name>.mov` (알파, FCP)
+  - `npx hyperframes render --format mov -o output/<name>.mov` (ProRes 4444 알파 자동, FCP)
+  - ⚠️ `--codec prores4444`는 hyperframes 0.8+에서 `Unknown flag` 에러 — 붙이지 말 것. mov는 항상 알파 ProRes.
   - `npx hyperframes render -o output/<name>.mp4` (ffmpeg 번인)
-- 사용 스킬: `hyperframes`(일반), `gsap`/`waapi`(애니메이션), `tailwind`(스타일), `lottie`/`three`(특수). 모두 `./hyperframes/.agents/skills/`에 깔려 있음.
+- 사용 스킬: `hyperframes`(일반), `gsap`/`waapi`(애니메이션), `tailwind`(스타일), `lottie`/`three`(특수). 모두 `./.claude/skills/`에 깔려 있음.
 
 ### EDL → 양 NLE 파일 (FCP + Premiere)
 
@@ -326,19 +327,21 @@ ProRes 4444 알파라 양 NLE 모두 자막 배경 자동 인식.
 npx hyperframes init <name>
 cd hyperframes && npm run dev      # preview
 npx hyperframes render             # mp4
-npx hyperframes render --format mov --codec prores4444 -o output/<name>.mov  # FCP 알파
-npx hyperframes transcribe <file> --json --language ko --model large-v3       # 로컬 Whisper
+npx hyperframes render --format mov -o output/<name>.mov  # ProRes 4444 알파 (FCP)
+npx hyperframes transcribe <file> --json --language ko --model large-v3       # 로컬 Whisper (whisper-cpp 필요)
+# whisper-cpp 없으면 (Windows 기본) — faster-whisper, 같은 Scribe 형식 출력
+.claude/skills/video-use/.venv/Scripts/python.exe .claude/skills/motion-pipeline/helpers/transcribe_local.py <file> -o footage/edit/transcripts/<name>.json
 npx hyperframes add <block>        # 레지스트리 블록 (lower-third 등) 설치
 npx hyperframes catalog            # 50+ 블록 브라우즈
 npx hyperframes doctor             # 환경 체크
 
 # Mode B — Edge TTS 일괄 내레이션 (무료, 키 불필요)
-~/Developer/video-use/.venv/bin/python \
+.claude/skills/video-use/.venv/Scripts/python.exe \
   .claude/skills/motion-pipeline/helpers/batch_tts.py segments.json -o narration/
 
 # Mode A — ElevenLabs Scribe (옵션, .env에 ELEVENLABS_API_KEY 필요)
-~/Developer/video-use/.venv/bin/python ~/Developer/video-use/helpers/transcribe.py <file>
-~/Developer/video-use/.venv/bin/python ~/Developer/video-use/helpers/timeline_view.py <file>
+.claude/skills/video-use/.venv/Scripts/python.exe .claude/skills/video-use/helpers/transcribe.py <file>
+.claude/skills/video-use/.venv/Scripts/python.exe .claude/skills/video-use/helpers/timeline_view.py <file>
 
 # EDL → 양 NLE 파일 (양 모드, 단일 명령)
 bash scripts/export_nle_files.sh
@@ -346,9 +349,9 @@ bash scripts/export_nle_files.sh
 #   → footage/edit/timeline.xml     (Premiere Pro, FCP7 XML)
 
 # 개별 helper 호출 (필요 시)
-~/Developer/video-use/.venv/bin/python \
+.claude/skills/video-use/.venv/Scripts/python.exe \
   .claude/skills/motion-pipeline/helpers/edl_to_fcpxml.py edl.json -o timeline.fcpxml
-~/Developer/video-use/.venv/bin/python \
+.claude/skills/video-use/.venv/Scripts/python.exe \
   .claude/skills/motion-pipeline/helpers/edl_to_fcp7_xml.py edl.json -o timeline.xml
 ```
 
@@ -356,16 +359,16 @@ bash scripts/export_nle_files.sh
 
 **Mode B는 키 0개.** Edge TTS와 hyperframes Whisper 모두 무료, 키 불필요.
 
-`ELEVENLABS_API_KEY`는 **Mode A에서 Scribe를 명시적으로 선택할 때만** 필요. `~/Developer/video-use/.env`에 설정.
+`ELEVENLABS_API_KEY`는 **Mode A에서 Scribe를 명시적으로 선택할 때만** 필요. `.claude/skills/video-use/.env`에 설정.
 
 ## 셋업 (이 repo는 이미 완료)
 
 1. `brew install ffmpeg uv git-lfs yt-dlp`
-2. `git clone https://github.com/browser-use/video-use ~/Developer/video-use`
-3. `cd ~/Developer/video-use && uv sync`
-4. `cd ~/Developer/video-use && uv pip install -r /path/to/repo/.claude/skills/motion-pipeline/helpers/requirements.txt` — edge-tts를 video-use venv에 추가
-5. `ln -sfn ~/Developer/video-use .claude/skills/video-use` — 프로젝트 로컬 스킬 등록
+2. `git clone https://github.com/browser-use/video-use .claude/skills/video-use`
+3. `cd .claude/skills/video-use && uv sync`
+4. `cd .claude/skills/video-use && uv pip install -r /path/to/repo/.claude/skills/motion-pipeline/helpers/requirements.txt` — edge-tts + faster-whisper를 video-use venv에 추가
+5. `ln -sfn .claude/skills/video-use .claude/skills/video-use` — 프로젝트 로컬 스킬 등록
 6. `cd hyperframes && npm install` (npx 베이스라 의존성은 거의 없음, package-lock만 잡음)
-7. (Optional, Mode A Scribe) `~/Developer/video-use/.env`에 `ELEVENLABS_API_KEY=...`
+7. (Optional, Mode A Scribe) `.claude/skills/video-use/.env`에 `ELEVENLABS_API_KEY=...`
 
-`git pull` 후 `~/Developer/video-use/`에서 step 4 재실행 — venv에 edge-tts 복원.
+`git pull` 후 `.claude/skills/video-use/`에서 step 4 재실행 — venv에 edge-tts 복원.

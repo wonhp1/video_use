@@ -2,18 +2,19 @@
 # 비디오유즈 파이프라인 셋업 스크립트
 #
 # 무엇을 하나:
-#   1. video-use를 ~/Developer/video-use 에 clone (없으면)
-#   2. video-use uv venv 동기화 + edge-tts 추가 (Mode B 내레이션용)
-#   3. 프로젝트 로컬에 .claude/skills/video-use 심볼릭 생성
+#   1. video-use를 .claude/skills/video-use 에 clone (프로젝트 스킬, 없으면)
+#   2. video-use uv venv 동기화 + edge-tts / faster-whisper 추가 (내레이션 + 로컬 전사)
+#   3. (프로젝트 스킬로 직접 clone하므로 심볼릭 불필요)
 #   4. footage/, hyperframes/ 디렉토리 정리
-#   5. 도구 동작 확인 (ffmpeg, hyperframes transcribe, edge-tts, batch_tts)
+#   5. 도구 동작 확인 (ffmpeg, edge-tts, faster-whisper, batch_tts, hyperframes)
 #
 # 멱등(idempotent) — 여러 번 실행해도 안전.
 
 set -euo pipefail
+export PYTHONUTF8=1  # Windows cp949 콘솔에서 한글·특수문자 출력 오류 방지
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VIDEO_USE_DIR="${VIDEO_USE_DIR:-$HOME/Developer/video-use}"
+VIDEO_USE_DIR="${VIDEO_USE_DIR:-$REPO_ROOT/.claude/skills/video-use}"
 
 c_green=$'\033[0;32m'
 c_yellow=$'\033[0;33m'
@@ -54,15 +55,15 @@ fi
 # ─────────────────────────────────────────────────────────────
 step "2. video-use 의존성 (uv sync)"
 # ─────────────────────────────────────────────────────────────
-(cd "$VIDEO_USE_DIR" && uv sync) >/dev/null
+(cd "$VIDEO_USE_DIR" && uv sync --python 3.12) >/dev/null
 ok "uv sync 완료"
 
 # ─────────────────────────────────────────────────────────────
-step "3. Edge TTS를 video-use venv에 추가 (Mode B 내레이션)"
+step "3. Edge TTS + faster-whisper를 video-use venv에 추가 (내레이션 + 로컬 전사)"
 # ─────────────────────────────────────────────────────────────
 (cd "$VIDEO_USE_DIR" && \
   uv pip install -r "$REPO_ROOT/.claude/skills/motion-pipeline/helpers/requirements.txt" >/dev/null)
-ok "edge-tts 설치 완료"
+ok "edge-tts, faster-whisper 설치 완료"
 
 # ─────────────────────────────────────────────────────────────
 step "4. .env 템플릿 (ElevenLabs Scribe 선택사항)"
@@ -76,11 +77,22 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────
-step "5. 프로젝트 로컬 심볼릭 (.claude/skills/video-use)"
+step "5. 프로젝트 스킬 (.claude/skills/video-use)"
 # ─────────────────────────────────────────────────────────────
 mkdir -p "$REPO_ROOT/.claude/skills"
-ln -sfn "$VIDEO_USE_DIR" "$REPO_ROOT/.claude/skills/video-use"
-ok "$REPO_ROOT/.claude/skills/video-use → $VIDEO_USE_DIR"
+if [ "$VIDEO_USE_DIR" != "$REPO_ROOT/.claude/skills/video-use" ]; then
+  ln -sfn "$VIDEO_USE_DIR" "$REPO_ROOT/.claude/skills/video-use"
+  ok "$REPO_ROOT/.claude/skills/video-use → $VIDEO_USE_DIR"
+else
+  ok "프로젝트 내부에 직접 설치됨 → $VIDEO_USE_DIR"
+fi
+
+# Windows venv는 Scripts/python.exe, macOS/Linux는 bin/python
+if [ -x "$VIDEO_USE_DIR/.venv/Scripts/python.exe" ]; then
+  VU_PY="$VIDEO_USE_DIR/.venv/Scripts/python.exe"
+else
+  VU_PY="$VIDEO_USE_DIR/.venv/bin/python"
+fi
 
 # ─────────────────────────────────────────────────────────────
 step "6. 디렉토리 구조 (footage/)"
@@ -98,8 +110,8 @@ if [ -d "$REPO_ROOT/hyperframes" ]; then
 
   # heygen-com/hyperframes의 보조 스킬 (Apache 2.0)을 upstream에서 직접 설치
   # — 우리 repo는 콘텐츠를 재배포하지 않고 사용자 환경에서 npx로 받게 함
-  if [ ! -d "$REPO_ROOT/hyperframes/.agents/skills/hyperframes" ]; then
-    (cd "$REPO_ROOT/hyperframes" && npx --yes skills@latest add heygen-com/hyperframes >/dev/null 2>&1) \
+  if [ ! -d "$REPO_ROOT/.claude/skills/hyperframes" ]; then
+    (cd "$REPO_ROOT" && npx --yes skills@latest add heygen-com/hyperframes -a claude-code -s "*" -y --copy >/dev/null 2>&1) \
       && ok "hyperframes 보조 스킬 8개 설치됨 (heygen-com/hyperframes, Apache 2.0)" \
       || warn "hyperframes 스킬 설치 실패 — 인터넷 연결 후 재시도"
   else
@@ -112,19 +124,31 @@ fi
 # ─────────────────────────────────────────────────────────────
 step "8. 동작 검증"
 # ─────────────────────────────────────────────────────────────
-"$VIDEO_USE_DIR/.venv/bin/python" -c "import edge_tts" 2>/dev/null \
+"$VU_PY" -c "import edge_tts" 2>/dev/null \
   && ok "edge-tts import OK" \
   || fail "edge-tts import 실패"
 
-"$VIDEO_USE_DIR/.venv/bin/python" \
+"$VU_PY" \
   "$REPO_ROOT/.claude/skills/motion-pipeline/helpers/batch_tts.py" --help >/dev/null \
   && ok "batch_tts.py 진입점 OK" \
   || fail "batch_tts.py 실행 실패"
 
-"$VIDEO_USE_DIR/.venv/bin/python" \
+"$VU_PY" \
   "$REPO_ROOT/.claude/skills/motion-pipeline/helpers/edl_to_fcpxml.py" --help >/dev/null \
   && ok "edl_to_fcpxml.py 진입점 OK" \
   || fail "edl_to_fcpxml.py 실행 실패"
+
+"$VU_PY" -c "import faster_whisper" 2>/dev/null \
+  && ok "faster-whisper import OK (transcribe_local.py — 로컬 전사)" \
+  || fail "faster-whisper import 실패"
+
+# npx hyperframes transcribe는 whisper-cpp 바이너리가 있어야 동작 (Windows 기본 미설치).
+# 없으면 transcribe_local.py(faster-whisper)로 대체 — 기능 동일, 추가 설치 불필요.
+if command -v whisper-cli >/dev/null 2>&1 || command -v whisper-cpp >/dev/null 2>&1; then
+  ok "whisper-cpp 있음 — npx hyperframes transcribe 사용 가능"
+else
+  warn "whisper-cpp 없음 — 전사는 helpers/transcribe_local.py(faster-whisper) 사용"
+fi
 
 # hyperframes transcribe는 첫 호출이 모델 다운로드라 시간 걸림. --help만 확인
 npx --yes --offline hyperframes@latest --version >/dev/null 2>&1 \

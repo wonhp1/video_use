@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-update_edl_overlays.py — EDL의 overlays를 cut별 자막 mov 16개로 갱신.
+update_edl_overlays.py — EDL의 overlays를 cut별 자막 mov로 갱신.
 
 split_subtitles_by_cuts.py가 만든 cut별 mov 디렉토리를 받아서 EDL의 overlays 항목을
 재구성한다. lane=1 (V2)에 cut과 1:1 attach.

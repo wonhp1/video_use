@@ -1,11 +1,14 @@
-# Project-local Python deps for the video-pipeline skill.
+# Project-local Python deps for the motion-pipeline skill.
 # Installed into the video-use venv so we don't pollute the upstream skill's pyproject.toml.
 #
-# Install with:
-#   uv pip install -r .claude/skills/video-pipeline/helpers/requirements.txt \
-#     --python .claude/skills/video-use/.venv/bin/python
+# Install with (scripts/setup.sh does this):
+#   cd .claude/skills/video-use && \
+#     uv pip install -r ../motion-pipeline/helpers/requirements.txt
 #
 # Re-run after `git pull` inside .claude/skills/video-use/.
 
 # Microsoft Edge TTS — free Korean/English voices, no API key
 edge-tts>=7.2.0
+
+# Local word-level ASR (transcribe_local.py) — works without whisper-cpp, no API key
+faster-whisper>=1.1.0
