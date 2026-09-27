@@ -311,6 +311,9 @@ projectItem.attachProxy("/path/proxy.mp4", 0); // → hasProxy() === true
    - 타임드 요소는 `class="clip"` + `data-start/data-duration/data-track-index` + 고유 `id`
    - `gsap.timeline({paused:true})` **하나**를 `window.__timelines["<id>"]`에 등록하고 `tl.seek(0)`
    - 등장은 `fromTo()`(autoAlpha 사용), 결정론적만(`Date.now()`/`Math.random()` 금지)
+   - **`class="clip"` 요소 자체에는 autoAlpha·opacity·visibility 를 걸지 않는다** — clip 의 표시는 프레임워크가 관리해서
+     `check` 가 `gsap_animates_clip_element` 로 실패한다(hyperframes 0.8.79 확인). clip 은 전체 화면 래퍼로 두고
+     애니메이션은 그 **안쪽 요소**에 건다: `<div id="layer" class="clip" ...><div id="card">…</div></div>` → `tl.fromTo("#card", …)`
    - 오버레이는 `body/html` 배경을 `transparent`로 (알파 보존)
    - **한글 폰트**: 시스템 폰트는 `@font-face { font-family:"Apple SD Gothic Neo"; src: local("AppleSDGothicNeo-Bold"); }`
      로 선언해야 lint를 통과하고 렌더에 실제 적용된다.
