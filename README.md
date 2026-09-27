@@ -5,6 +5,17 @@
 > Repo: https://github.com/wonhp1/video_use
 > License: [MIT](LICENSE)
 
+## 먼저 고르세요 — 편집 프로그램을 쓰시나요?
+
+| 선택                                                     | 이런 분께                                         | 시작                                           |
+| -------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| **편집 프로그램 없이** (이 문서)                         | 프로그램 없이 완성 mp4를 바로 받고 싶다           | `bash scripts/setup.sh`                        |
+| **편집 프로그램 사용** → [nle-auto-edit](nle-auto-edit/) | Premiere / CapCut / Final Cut 안에서 편집하고 싶다 | `bash nle-auto-edit/install.sh <프로그램>`     |
+
+Claude Code(또는 AGENTS.md를 읽는 에이전트)로 이 폴더를 열면 **첫 대화에서 이 질문을 먼저 합니다.** 답은 `.edit-mode`에 저장돼 다음부터는 묻지 않습니다.
+
+아래는 **편집 프로그램 없이** 갈래의 설명입니다.
+
 | 모드                    | 입력                   | 산출물                                   |
 | ----------------------- | ---------------------- | ---------------------------------------- |
 | **A — 풋티지 편집**     | `footage/` 의 raw 영상 | 트랜스크립트 기반 컷 + 자막 + 모션그래픽 |
@@ -66,6 +77,7 @@ bash scripts/setup.sh
 │   │   │                          split_subtitles_by_cuts, update_edl_overlays, ...
 │   │   └── examples/edl.example.json
 │   └── video-use → ~/Developer/video-use   (프로젝트 로컬 심볼릭, gitignore 됨)
+├── nle-auto-edit/              ← 편집 프로그램 사용 갈래 (Premiere / CapCut / Final Cut 직접 조작)
 ├── footage/                    ← raw 영상(A) 또는 산출물(B). edit/ 하위는 자동 생성
 ├── hyperframes/                ← hyperframes 컴포지션 프로젝트 + .agents/skills/
 ├── scripts/

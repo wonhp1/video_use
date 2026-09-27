@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, sans-serif; background:#1e1e1e; color:#eee; padding:16px; }
+  h3 { margin:0 0 12px; }
+  button { font-size:15px; padding:10px 16px; margin:4px 0; cursor:pointer; }
+  #out { margin-top:14px; padding:12px; background:#000; border:1px solid #444;
+         white-space:pre-wrap; word-break:break-all; min-height:60px; font-family:monospace; font-size:13px; }
+  .ok { color:#5fd35f; } .err { color:#ff6b6b; }
+</style>
+</head>
+<body>
+  <h3>evalScript 진단</h3>
+  <button id="b1">1) app.version 테스트</button><br>
+  <button id="b2">2) 1+1 테스트</button><br>
+  <button id="b3">3) 프로젝트 이름 테스트</button>
+  <div id="out">버튼을 누르세요…</div>
+
+  <script src="./CSInterface.js"></script>
+  <script>
+    var cs = new CSInterface();
+    var out = document.getElementById("out");
+    function run(label, script) {
+      out.textContent = label + " 실행 중…";
+      var t = setTimeout(function(){ out.innerHTML = "<span class='err'>타임아웃 — 콜백이 안 옴 (엔진 무응답)</span>"; }, 4000);
+      cs.evalScript(script, function (result) {
+        clearTimeout(t);
+        var r = (result === undefined) ? "undefined" : (result === "" ? "(빈 문자열)" : result);
+        var cls = (result && result !== "undefined" && result !== "") ? "ok" : "err";
+        out.innerHTML = "<span class='" + cls + "'>" + label + " → 결과: [" + r + "]</span>";
+      });
+    }
+    document.getElementById("b1").onclick = function(){ run("app.version", "app.version"); };
+    document.getElementById("b2").onclick = function(){ run("1+1", "(1+1).toString()"); };
+    document.getElementById("b3").onclick = function(){ run("프로젝트", "app.project ? app.project.name : 'no-project'"); };
+  </script>
+</body>
+</html>

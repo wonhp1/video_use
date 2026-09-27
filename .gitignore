@@ -1,6 +1,9 @@
 # 사용자별 절대경로(~/Developer/video-use)로 가는 심볼릭 — 환경마다 새로 만들 것
 .claude/skills/video-use
 
+# 사용자가 고른 편집 갈래 (CLAUDE.md 첫 질문 결과) — 사람마다 다름
+.edit-mode
+
 # env / secrets
 .env
 .env.local

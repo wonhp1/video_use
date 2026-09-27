@@ -1,0 +1,18 @@
+{
+  "_설명": "이 항목을 claude_desktop_config.json 의 mcpServers 안에 추가하세요. install.sh 를 쓰면 자동으로 등록됩니다. 경로는 본인 환경에 맞게 바꾸세요.",
+  "_경로_확인": "command(node 경로)=  command -v node   /   args(패키지 경로)=  echo $(npm root -g)/premiere-pro-mcp/dist/index.js",
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "/usr/local/bin/node",
+      "args": [
+        "/<npm-global>/lib/node_modules/premiere-pro-mcp/dist/index.js"
+      ],
+      "env": {
+        "PREMIERE_TEMP_DIR": "/tmp/premiere-mcp-bridge",
+        "PREMIERE_MCP_CAPABILITIES": "inspect,edit,export,filesystem,unsafe-script",
+        "DEBUG": "0"
+      }
+    }
+  },
+  "_필수": "PREMIERE_MCP_CAPABILITIES 의 unsafe-script 가 없으면 execute_extendscript 가 차단되어 모든 편집이 실패합니다 (premiere-pro-mcp 1.13.0+)."
+}

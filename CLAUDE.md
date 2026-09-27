@@ -2,9 +2,33 @@
 
 > 이 파일은 **`CLAUDE.md`(Claude Code) + `AGENTS.md`(Codex/Cursor/Gemini CLI 등)** 양쪽으로 사용됩니다 — `AGENTS.md`는 `CLAUDE.md`로 가는 심볼릭 링크.
 
-이 repo는 **두 모드 영상 파이프라인**입니다. 자세한 흐름은 [README.md](README.md), [USAGE.md](USAGE.md), [.claude/skills/motion-pipeline/SKILL.md](.claude/skills/motion-pipeline/SKILL.md)에 있습니다.
+이 repo에는 **두 갈래**가 있습니다.
 
-## 첫 진입 시 자동 점검
+| 갈래                                  | 위치                                   | 하는 일                                                               |
+| ------------------------------------- | -------------------------------------- | --------------------------------------------------------------------- |
+| **편집 프로그램 없이** (기본)         | `.claude/skills/motion-pipeline/`      | ffmpeg·hyperframes로 `final.mp4` 직접 생성 (+ NLE용 XML)              |
+| **편집 프로그램 사용** (nle-auto-edit) | [`nle-auto-edit/`](nle-auto-edit/README.md) | Claude가 Premiere / CapCut / Final Cut을 직접 조작해 그 안에서 편집 |
+
+## 가장 먼저: 어느 갈래인지 묻기 (필수)
+
+clone 후 첫 대화에서는 점검·셋업·편집보다 **먼저** 사용자에게 묻는다:
+
+> 영상 편집 프로그램(Premiere Pro / CapCut / Final Cut Pro)을 쓰시나요?
+> 1. **편집 프로그램 사용** — Claude가 그 프로그램을 직접 조작해 편집합니다 (어느 프로그램인지도 알려주세요)
+> 2. **편집 프로그램 없이** — 프로그램 없이 완성 영상(mp4)을 바로 만듭니다
+
+- 묻지 않아도 되는 경우: 사용자가 첫 요청에서 이미 밝혔을 때 ("프리미어로…", "캡컷 자막…" → 1번 / "프로그램 없이", "mp4로 바로" → 2번).
+- 답을 받으면 repo 루트의 `.edit-mode` 파일에 `nle:<premiere|capcut|finalcut>` 또는 `standalone` 한 줄로 기록한다 (gitignore됨). 다음 세션부터는 이 파일이 있으면 묻지 않고 그 갈래로 간다. 사용자가 바꾸자고 하면 파일을 고친다.
+
+**1번 (편집 프로그램 사용)을 고르면:**
+
+1. `bash nle-auto-edit/install.sh <premiere|capcut|finalcut>` 실행 → `~/.claude/skills/`에 코어(`ai-video-edit`)와 해당 어댑터 설치. Windows에서 Premiere면 `premiere-windows`.
+2. 프로그램별 추가 설정을 [nle-auto-edit/README.md](nle-auto-edit/README.md)의 해당 절대로 안내 (Premiere는 MCP 등록 + `nle-auto-edit/premiere/mcp-setup/install.sh`, Final Cut은 `fcp-mcp` 등록, CapCut은 추가 설정 없음).
+3. "Claude를 재시작해야 스킬이 로드됩니다" 안내. 이 갈래에서는 아래 "첫 진입 시 자동 점검"(video-use 셋업)을 하지 않는다.
+
+**2번 (편집 프로그램 없이)을 고르면:** 아래 점검부터 진행한다.
+
+## 첫 진입 시 자동 점검 (편집 프로그램 없이 갈래)
 
 사용자가 작업을 요청하기 전에:
 
