@@ -1,0 +1,10 @@
+{
+  "package": "premiere-pro-mcp",
+  "repository": "leancoderkavy/premiere-pro-mcp",
+  "repositoryUrl": "https://github.com/leancoderkavy/premiere-pro-mcp",
+  "homepage": "https://premiere-pro-mcp.com/",
+  "verifiedVersion": "1.31.0",
+  "verifiedAt": "2026-11-22",
+  "verifiedEnvironment": "macOS, Adobe Premiere Pro 2027 (27.0.0, CEP 12), Node 26, CEP bridge only (UXP not configured) / Windows 11, Adobe Premiere Pro 2027 (27.0.0, Korean UI), Node 26, signed CEP connector without PlayerDebugMode",
+  "verifiedBy": "macOS: 설치·패널 연결·verify_premiere_connection ready, 도구 453개 전체 테스트(references/known-issues.md). Windows: 설치·ensure-premiere로 켜기·verify_premiere_connection ready, 편집 스킬 흐름(references/windows.md)"
+}

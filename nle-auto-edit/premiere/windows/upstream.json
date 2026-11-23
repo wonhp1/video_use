@@ -1,0 +1,28 @@
+{
+  "package": "premiere-pro-mcp",
+  "repository": "leancoderkavy/premiere-pro-mcp",
+  "repositoryUrl": "https://github.com/leancoderkavy/premiere-pro-mcp",
+  "homepage": "https://premiere-pro-mcp.com/",
+  "verifiedVersion": "1.31.0",
+  "verifiedAt": "2026-11-22",
+  "verifiedEnvironment": "Windows 11, Adobe Premiere Pro 2027 (27.0.0, Korean UI), Node 26, Python 3.12, faster-whisper 1.2.1 (PyAV 15.1), signed CEP connector",
+  "verifiedBy": "실제 Premiere에서 무음 컷(29.97fps, ripple_remove_timeline_ranges, 34.968초 → 22.222초), export_sequence(16kHz 모노 WAV), create_caption_track(자막 10개, 화면 확인). wonhp1/claude-premiere-auto-edit tests/README.md Windows 절",
+  "requiredTools": [
+    "verify_premiere_connection",
+    "get_project_info",
+    "get_active_sequence",
+    "detect_silence",
+    "ripple_remove_timeline_ranges",
+    "razor_all_tracks",
+    "ripple_delete",
+    "export_sequence",
+    "import_media",
+    "create_caption_track",
+    "get_bridge_telemetry",
+    "inspect_operation_recovery",
+    "acknowledge_operation_recovery"
+  ],
+  "notUsed": {
+    "execute_extendscript": "1.31.0에서는 unsafe-script 권한이 있어야 등록된다. 이 스킬은 그 권한을 켜지 않는다."
+  }
+}
