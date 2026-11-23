@@ -1,13 +1,13 @@
 ---
 name: ai-video-edit
 description: >-
-  영상 편집 프로그램을 Claude가 직접 조작해 자동 편집한다. 사용자가 "무음 구간 잘라줘",
-  "컷편집 해줘", "자막 달아줘", "받아쓰기", "모션그래픽 넣어줘", "타이틀 만들어줘",
-  "전환 넣어줘", "배경음악 깔아줘", "영상 편집 자동화" 같은 요청을 하거나, 편집 프로그램
-  이름(프리미어/프리미어프로/Premiere, 캡컷/CapCut)을 언급할 때 사용한다. 이 스킬은 공통
-  뼈대다 — 어떤 프로그램인지 판별해 해당 어댑터 스킬(premiere-auto-edit / capcut-auto-edit)로
-  넘기고, 프로그램과 무관한 분석(무음 감지·단어 타임스탬프 받아쓰기·자막 분할·모션그래픽 렌더)과
-  검증 규칙을 제공한다. 사용자가 프로그램을 안 밝히면 반드시 먼저 물어본다.
+  사용자가 영상 편집 프로그램을 이름으로 지목했을 때만 쓴다 — 프리미어(Premiere Pro),
+  캡컷(CapCut), 파이널컷(Final Cut Pro). 예: "프리미어 무음 잘라줘", "캡컷 자막 달아줘",
+  "파이널컷으로 컷편집해줘". 프로그램을 말하지 않은 편집 요청("무음 잘라줘", "자막 달아줘",
+  "영상 편집해줘")에는 쓰지 않고, 어느 프로그램을 쓸지 묻지도 않는다 — 그때는 편집 프로그램
+  없이 처리한다. 이 스킬은 공통 뼈대다 — 지목된 프로그램의 어댑터 스킬(premiere-auto-edit /
+  capcut-auto-edit / finalcut-auto-edit)로 넘기고, 프로그램과 무관한 분석(무음 감지·단어
+  타임스탬프 받아쓰기·자막 분할·모션그래픽 렌더)과 검증 규칙을 제공한다.
 ---
 
 # AI 영상 편집 — 공통 뼈대
@@ -19,11 +19,13 @@ description: >-
 
 | 프로그램 | 어댑터 스킬 | 연결 방식 |
 |---|---|---|
-| Adobe Premiere Pro | `premiere-auto-edit` | MCP + ExtendScript — **실시간** 반영 |
+| Adobe Premiere Pro | `premiere-auto-edit` | premiere-pro MCP 기본 도구 — **실시간** 반영 (설치·연결은 `premiere-mcp-setup`) |
 | CapCut (캡컷) | `capcut-auto-edit` | draft JSON 파일 편집 — **앱 종료 후** 반영 |
 | Final Cut Pro (파이널컷) | `finalcut-auto-edit` | FCPXML 생성 → 임포트 — **보관함 선택 클릭** 필요 |
 
-- 사용자가 프로그램을 밝히지 않았으면 **묻는다**. 추측해서 진행하지 않는다.
+- 사용자가 프로그램 이름을 말했을 때만 이 스킬과 어댑터를 쓴다.
+- 이름이 없는 편집 요청이면 **묻지 않고** 편집 프로그램 없이 처리한다(ffmpeg 등으로 결과 파일을 바로 만든다).
+  프로그램을 추측해서 어댑터로 넘기지 않는다.
 - 어댑터를 정했으면 그 스킬의 SKILL.md를 읽고 **그쪽 절차를 따른다**.
 - 목록에 없는 프로그램을 요청받으면 아래 "새 프로그램" 절을 따른다.
 
@@ -41,11 +43,12 @@ bash ~/.claude/skills/ai-video-edit/scripts/detect_silence.sh "<영상경로>" <
 
 ### 단어 단위 받아쓰기
 ```bash
-python3 ~/.claude/skills/ai-video-edit/scripts/transcribe_words.py <오디오> --lang ko --workdir <WORK>
+~/.local/share/nle-auto-edit/venv/bin/python ~/.claude/skills/ai-video-edit/scripts/transcribe_words.py <오디오> --lang ko --workdir <WORK>
 ```
 - faster-whisper `word_timestamps=True`. whisper.cpp 는 타임스탬프가 부정확해 쓰지 않는다.
-- ⚠️ python3 가 anaconda 로 잡히면 faster-whisper 가 없다.
-  `/Library/Frameworks/Python.framework/Versions/3.14/bin/python3` 를 명시적으로 쓴다.
+- `install.sh` 가 가상환경 `~/.local/share/nle-auto-edit/venv` 에 faster-whisper 와 `av<16` 을 설치한다
+  (faster-whisper 1.2.1 은 PyAV 16 이상에서 실패한다). 가상환경이 없으면 faster-whisper 가 설치된 python3 를 쓴다.
+  python3 가 anaconda 나 시스템 python 으로 잡히면 faster-whisper 가 없을 수 있다.
 
 ### 쉼 기반 자막 분할
 ```bash
@@ -112,7 +115,7 @@ python3 ~/.claude/skills/ai-video-edit/scripts/segment_subtitles.py --workdir <W
 
 판정 전에 아래를 전부 소진한다.
 
-1. 다른 API/경로가 있는가 (MCP 기본 도구 대신 직접 스크립트 등)
+1. 다른 API/경로가 있는가 (다른 도구, 파일 편집 등. 프리미어는 `execute_extendscript`·unsafe-script 로 우회하지 않는다)
 2. 앱이 실행 중이라 덮어쓴 것은 아닌가 (파일 편집 방식)
 3. 함께 고쳐야 할 **짝**을 빠뜨리지 않았나 (material, 등록부, 미러 파일)
 4. 시간/길이 관련 필드를 다시 계산했나
@@ -133,9 +136,10 @@ CSInterface.js 를 그대로 복사해 "시스템 고장"이라고 오판한 적
 
 1. **안내** — "이 기능은 아직 검증 안 됐습니다. 만들어서 시도해볼까요?"
 2. **동의** 를 받는다
-3. **제작** — 어댑터의 `references/recipes.md` 에 있는 검증된 패턴을 조합
+3. **제작** — 캡컷·파이널컷은 어댑터의 `references/recipes.md` 에 있는 검증된 패턴을 조합한다.
+   프리미어는 레시피 없이 premiere-pro MCP 기본 도구(`get_capabilities` 로 검색)로 만든다.
 4. **검증** — 위 3절 프로토콜대로. 실패하면 4절 체크리스트를 소진
-5. **기록** — 성공/실패 모두 어댑터의 `recipes.md` 에 코드와 함께 남긴다.
+5. **기록** — 캡컷·파이널컷은 성공/실패 모두 어댑터의 `recipes.md` 에 코드와 함께 남긴다.
    실패는 **시도한 접근 목록**까지 적어 다음에 같은 삽질을 반복하지 않게 한다.
 
 ## 6) 새 프로그램을 추가할 때

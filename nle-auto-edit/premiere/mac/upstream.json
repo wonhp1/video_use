@@ -1,0 +1,28 @@
+{
+  "package": "premiere-pro-mcp",
+  "repository": "leancoderkavy/premiere-pro-mcp",
+  "repositoryUrl": "https://github.com/leancoderkavy/premiere-pro-mcp",
+  "homepage": "https://premiere-pro-mcp.com/",
+  "verifiedVersion": "1.31.0",
+  "verifiedAt": "2026-11-22",
+  "verifiedEnvironment": "macOS, Adobe Premiere Pro 2027 (27.0.0, CEP 12), English UI, CEP bridge only (UXP not configured)",
+  "verifiedBy": "29.97/23.976/30fps 테스트 영상으로 무음 컷(프레임 단위 readback 비교)·WAV export(ffprobe)·자막 트랙(화면 확인) 실측",
+  "requiredTools": [
+    "verify_premiere_connection",
+    "get_project_info",
+    "get_active_sequence",
+    "detect_silence",
+    "ripple_remove_timeline_ranges",
+    "razor_all_tracks",
+    "ripple_delete",
+    "export_sequence",
+    "import_media",
+    "create_caption_track",
+    "get_bridge_telemetry",
+    "inspect_operation_recovery",
+    "acknowledge_operation_recovery"
+  ],
+  "notUsed": {
+    "execute_extendscript": "1.31.0에서는 unsafe-script 권한이 있어야 등록된다. 이 스킬은 그 권한을 켜지 않는다."
+  }
+}

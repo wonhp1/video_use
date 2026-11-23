@@ -9,28 +9,22 @@
 | **편집 프로그램 없이** (기본)         | `.claude/skills/motion-pipeline/`      | ffmpeg·hyperframes로 `final.mp4` 직접 생성 (+ NLE용 XML)              |
 | **편집 프로그램 사용** (nle-auto-edit) | [`nle-auto-edit/`](nle-auto-edit/README.md) | Claude가 Premiere / CapCut / Final Cut을 직접 조작해 그 안에서 편집 |
 
-## 가장 먼저: 어느 갈래인지 묻기 (필수)
+## 어느 갈래로 갈지 — 묻지 않는다
 
-clone 후 첫 대화에서는 점검·셋업·편집보다 **먼저** 사용자에게 묻는다:
+- **기본은 "편집 프로그램 없이"다.** "이 영상 편집해줘", "무음 잘라줘", "자막 달아줘"처럼 프로그램을 말하지 않은 요청은
+  편집 프로그램을 쓸지 묻지 않고 이 갈래(motion-pipeline)로 처리한다.
+- **사용자가 프로그램 이름을 말할 때만** 편집 프로그램 갈래로 간다 ("프리미어로…", "캡컷 자막…", "파이널컷으로…").
+  그 요청 하나만 그 프로그램으로 처리한다. 다음 요청에 이름이 없으면 다시 기본 갈래다.
 
-> 영상 편집 프로그램(Premiere Pro / CapCut / Final Cut Pro)을 쓰시나요?
-> 1. **편집 프로그램 사용** — Claude가 그 프로그램을 직접 조작해 편집합니다 (어느 프로그램인지도 알려주세요)
-> 2. **편집 프로그램 없이** — 프로그램 없이 완성 영상(mp4)을 바로 만듭니다
+**편집 프로그램 갈래로 갈 때 (스킬이 아직 없으면):**
 
-- 묻지 않아도 되는 경우: 사용자가 첫 요청에서 이미 밝혔을 때 ("프리미어로…", "캡컷 자막…" → 1번 / "프로그램 없이", "mp4로 바로" → 2번).
-- 답을 받으면 repo 루트의 `.edit-mode` 파일에 `nle:<premiere|capcut|finalcut>` 또는 `standalone` 한 줄로 기록한다 (gitignore됨). 다음 세션부터는 이 파일이 있으면 묻지 않고 그 갈래로 간다. 사용자가 바꾸자고 하면 파일을 고친다.
-
-**1번 (편집 프로그램 사용)을 고르면:**
-
-1. `bash nle-auto-edit/install.sh <premiere|capcut|finalcut>` 실행 → `~/.claude/skills/`에 코어(`ai-video-edit`)와 해당 어댑터 설치. Windows에서 Premiere면 `premiere-windows`.
-2. 프로그램별 추가 설정을 [nle-auto-edit/README.md](nle-auto-edit/README.md)의 해당 절대로 안내 (Premiere는 MCP 등록 + `nle-auto-edit/premiere/mcp-setup/install.sh`, Final Cut은 `fcp-mcp` 등록, CapCut은 추가 설정 없음).
+1. `bash nle-auto-edit/install.sh <premiere|capcut|finalcut>` 실행 → `~/.claude/skills/`에 코어(`ai-video-edit`)와 해당 어댑터를 설치하고, 필요한 도구(Node·ffmpeg·faster-whisper 등)가 없으면 설치한다. Windows에서 Premiere면 `powershell -ExecutionPolicy Bypass -File nle-auto-edit\install.ps1`.
+2. 프로그램별 추가 설정을 [nle-auto-edit/README.md](nle-auto-edit/README.md)의 해당 절대로 안내 (Premiere는 Claude 재시작 후 그 작업 폴더에서 "프리미어 연결해줘" → `premiere-mcp-setup` 스킬, Final Cut은 `fcp-mcp` 등록, CapCut은 추가 설정 없음).
 3. "Claude를 재시작해야 스킬이 로드됩니다" 안내. 이 갈래에서는 아래 "첫 진입 시 자동 점검"(video-use 셋업)을 하지 않는다.
-
-**2번 (편집 프로그램 없이)을 고르면:** 아래 점검부터 진행한다.
 
 ## 첫 진입 시 자동 점검 (편집 프로그램 없이 갈래)
 
-사용자가 작업을 요청하기 전에:
+편집 프로그램 없이 처리할 작업을 시작하기 전에:
 
 1. `~/Developer/video-use` 가 존재하지 않으면 → "셋업이 필요합니다. `bash scripts/setup.sh` 를 실행해 주세요" 안내.
 2. `.claude/skills/video-use` 심볼릭이 깨졌으면 → setup.sh 재실행 권장.

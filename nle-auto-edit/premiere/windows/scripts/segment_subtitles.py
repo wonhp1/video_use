@@ -20,6 +20,11 @@ segment_subtitles.py — 어절 JSON(words.json)을 "말할 때만 뜨는" 1줄 
 
 import argparse, json, os, sys
 
+# Windows: 출력을 파이프로 읽을 때(Claude Code 셸 등) 한글이 cp949로 나가 깨지지 않게 UTF-8로 고정한다.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 NO_START = (
     "수",
     "것",
