@@ -24,6 +24,11 @@ description: >-
 - 기준 버전과 필수 도구: 이 폴더의 `upstream.json` (1.31.0, macOS·Windows 검증)
 - 도구 이름·인자·권한이 이 문서와 다르면 **원본을 따른다.**
 
+## 자율 판단 & 최신 방법 우선
+
+아래 절차는 검증 당시의 기준선(baseline)일 뿐 고정된 정답이 아니다. `get_capabilities`로 더 직접적인 최신 MCP 도구가 생겼거나, 영상 성격·레퍼런스에 더 잘 맞는 분석·컷·자막·모션그래픽(3단계 자동 선택) 방법이 있다면 **구식 절차에 얽매이지 말고 더 나은 방법을 스스로 선택·제안**한다(`ai-video-edit` 0절 참조).
+단, **안전장치(`expected_project_path` 가드, `dry_run` 확인, `execute_extendscript`/`unsafe-script` 금지, 저장 대화상자 임의 선택 금지, 실행 후 재읽기 및 시각 검증)**는 반드시 유지한다.
+
 ## 작업 폴더
 
 모든 산출물은 **세션 프로젝트 폴더** 아래 `premiere-auto-edit\`에 둔다. 이하 `<WORK>`. 경로는 영문으로 둔다(사용자 이름이 한글이면 `%TEMP%` 대신 `C:\premiere-work` 같은 폴더를 쓴다).
