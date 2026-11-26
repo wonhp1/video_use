@@ -1,371 +1,198 @@
 ---
 name: motion-pipeline
-description: video-use(컷 편집·자막·컬러)와 hyperframes(HTML→비디오 모션그래픽)를 결합한 두 모드 파이프라인. Mode A는 raw 풋티지를 편집(트랜스크립트 기반 컷·컬러·자막), Mode B는 스크립트에서 영상을 생성(Edge TTS 내레이션 + hyperframes 모션그래픽, 풋티지 없음). 두 모드 모두 NLE 양쪽 export(timeline.fcpxml + timeline.xml — Final Cut Pro와 Premiere Pro 둘 다 호환) + final.mp4. 사용자가 "이 영상 편집해줘", "타이틀/로어써드 추가", "스크립트로 한국어 릴스/숏폼 만들기" 요청하면 트리거. 기본은 무료 워크플로우(hyperframes Whisper + Edge TTS), ElevenLabs Scribe는 선택사항(다중 화자 또는 한국어 필러 자동컷이 핵심일 때만).
+description: >-
+  편집 프로그램(Premiere Pro, CapCut, Final Cut Pro) 없이 로컬 CLI 도구(ffmpeg, ffprobe,
+  faster-whisper, yt-dlp, python3)와 3단계 자동 선택 모션그래픽(Python+ffmpeg / Hyperframes /
+  Remotion)만으로 영상을 분석·편집·검증하는 범용 영상 편집 스킬. Windows와 macOS(Linux 포함)를
+  모두 지원하며 누락된 의존성은 자동 점검·설치한다. 사용자가 편집 프로그램 이름을 말하지 않고
+  "이 영상 편집해줘", "무음 잘라줘", "자막 달아줘", "이 레퍼런스처럼 편집해줘",
+  "타이틀/로어써드/모션그래픽 넣어줘", "쇼츠/릴스로 만들어줘"처럼 요청할 때 트리거한다.
+  사용자가 프리미어·캡컷·파이널컷을 이름으로 지목했을 때는 이 스킬을 쓰지 않고
+  nle-auto-edit 갈래로 넘긴다.
 ---
 
-# Motion Pipeline (video-use × hyperframes)
-
-이 스킬은 두 도구를 결합한다:
-
-- **video-use** — `.claude/skills/video-use` (`~/Developer/video-use`로 심볼릭). 트랜스크립트 기반 컷, ffmpeg 합성, 자막 번인. Hard Rules는 video-use의 [SKILL.md](../video-use/SKILL.md)에 있음 — 그게 진리다.
-- **hyperframes** — `./hyperframes/`. HTML/CSS/GSAP/Lottie/Three.js 합성물 → 결정론적 mp4/mov 렌더. 추가로 `transcribe`(로컬 Whisper) 서브커맨드 내장.
-
-video-use SKILL.md의 Hard Rules는 **무조건** 따른다. 이 파일은 두 도구의 결합 방식과 프로젝트 컨벤션만 다룬다.
-
-## 두 운영 모드
-
-| 모드                  | 트리거                  | 입력        | TTS                                           | ASR                                                             | 비용                     |
-| --------------------- | ----------------------- | ----------- | --------------------------------------------- | --------------------------------------------------------------- | ------------------------ |
-| **A — 풋티지 편집**   | `./footage/`에 raw 영상 | 비디오 파일 | n/a                                           | hyperframes Whisper(기본·무료) **또는** ElevenLabs Scribe(선택) | $0 / Scribe 시 ~$0.40/hr |
-| **B — 스크립트→영상** | 스크립트 .md/.txt 지정  | 텍스트      | **Edge TTS** (무료, `ko-KR-SunHiNeural` 기본) | hyperframes Whisper (단어 동기화용)                             | **$0**                   |
-
-## 책임 분담
-
-| 영역                                      | 담당                                                             |
-| ----------------------------------------- | ---------------------------------------------------------------- |
-| 트랜스크립션 (Mode A)                     | **hyperframes Whisper(무료, 기본)** 또는 ElevenLabs Scribe(선택) |
-| 내레이션 생성 (Mode B)                    | **Edge TTS** (무료, API 키 불필요)                               |
-| 단어 단위 동기화 (Mode B)                 | `npx hyperframes transcribe` (Whisper 로컬)                      |
-| 컷 결정 / EDL / 필러 제거 (Mode A)        | video-use                                                        |
-| 무음 구간 컷 검출                         | **ffmpeg `silencedetect`** (ASR 무관, 완전 무료)                 |
-| 컬러 / 오디오 페이드 / 자막 번인 / concat | video-use (ffmpeg)                                               |
-| 모션그래픽 오버레이                       | hyperframes                                                      |
-| 최종 합성                                 | video-use (ffmpeg가 hyperframes mp4/mov 오버레이)                |
-
-## 프로젝트 컨벤션
-
-- **풋티지 위치**: `./footage/` (사용자가 원하는 경로 지정 OK). 출력은 `<videos_dir>/edit/`.
-- **hyperframes 합성물 위치**: `./hyperframes/<composition-name>/`. 새 컴포지션은 `cd hyperframes && npx hyperframes init <name>`.
-- **오버레이 포맷**: ProRes 4444 .mov(알파 보존, FCP용) **+** mp4(ffmpeg 번인용) 둘 다 렌더.
-- **Triple deliverable**: 매 실행마다 세 산출물.
-  1. `./footage/edit/final.mp4` — 완성본 (자막 번인 + 컬러 합성)
-  2. `./footage/edit/timeline.fcpxml` — Final Cut Pro 임포트용 (컷 + 자막 V2 overlay)
-  3. `./footage/edit/timeline.xml` — Premiere Pro 임포트용 (FCP7 XML, 컷 + 자막 V2 overlay)
-
-  EDL 작성 후 양 NLE 파일은 **단일 명령으로 동시 export**:
-
-  ```bash
-  bash scripts/export_nle_files.sh
-  ```
-
-## Mode A — 풋티지 편집
-
-1. 사용자가 `./footage/`에 클립을 넣는다.
-2. **트랜스크립션**: 기본 `npx hyperframes transcribe <file> --json --language ko --model large-v3` 사용. ElevenLabs Scribe가 필요하면 `~/Developer/video-use/.env`의 `ELEVENLABS_API_KEY` 채우고 `~/Developer/video-use/.venv/bin/python ~/Developer/video-use/helpers/transcribe.py <file>`. **Whisper 출력을 Scribe 호환 JSON 형식(words[].{type,text,start,end,speaker_id})으로 어댑트해서** video-use helpers에 입력.
-3. video-use가 `takes_packed.md`를 만들고 컷 전략을 평문으로 제시 → **사용자 승인 대기**.
-4. 모션그래픽 오버레이를 병렬 sub-agent로 렌더 (아래 [모션그래픽](#모션그래픽-공통) 참조).
-5. `./footage/edit/edl.json` 작성.
-6. video-use가 segment-단위 ffmpeg extract → 오버레이 합성 → `-c copy` concat → 30ms 오디오 페이드 → 컬러 → **자막은 마지막**에 번인 → `final.mp4`.
-7. EDL → 양 NLE 파일 export (`bash scripts/export_nle_files.sh`) → `timeline.fcpxml` + `timeline.xml`.
-8. 자기평가 루프, 최대 3회 fix+재렌더.
-
-### 무음 컷 (Mode A 핵심 — ASR 무관)
-
-ffmpeg `silencedetect`만으로 처리. Whisper/ElevenLabs와 무관하게 동작:
-
-```bash
-ffmpeg -nostdin -hide_banner -i <audio> \
-  -af silencedetect=noise=-30dB:d=0.5 \
-  -f null -
-```
-
-stderr의 `silence_start: X.XXX` / `silence_end: Y.YYY | silence_duration: Z.ZZZ` 라인을 정규식 파싱 → `SilenceRange[]` → wordSnap으로 단어 경계 정렬 → CutSuggestion → 사용자 승인 → EDL의 keep-range로 변환.
-
-### Source 영상 사전 점검 (Mode A FCPXML 산출 시 필수)
-
-EDL → FCPXML 단계는 **세 가지 source 메타데이터에 민감**하다. Mode A 시작 시 자동 점검:
-
-1. **NTSC frame rate** — `ffprobe -show_entries stream=r_frame_rate`. 30000/1001(29.97), 24000/1001(23.976), 60000/1001(59.94)면 EDL에 `fps_num`/`fps_den`을 명시 (helper의 `parse_fps`가 자동 인식하지만 명시가 안전).
-
-2. **한글 경로** — macOS는 NFD로 저장. helper가 NFC로 자동 normalize하지만, FCP가 그래도 거부하면 영문 임시 경로로 사본:
-
-   ```bash
-   mkdir -p /tmp/bidiouse && cp footage/한글영상.MP4 /tmp/bidiouse/source.MP4
-   # EDL의 sources[0].path를 /tmp/bidiouse/source.MP4로 갱신
-   ```
-
-3. **timecode 메타데이터** — DJI/GoPro/일부 카메라는 0이 아닌 timecode(`07:26:28;00` 등)를 박음. FCP가 source 좌표계로 해석하면 우리 0초 기준 EDL과 mismatch:
-   ```bash
-   ffprobe -v error -show_entries stream_tags=timecode \
-     -of default=noprint_wrappers=1 footage/원본.MP4
-   ```
-   `00:00:00:00`이 아니면 strip:
-   ```bash
-   ffmpeg -y -i footage/원본.MP4 -c copy -map_metadata -1 \
-     -timecode 00:00:00:00 /tmp/bidiouse/source.MP4
-   # EDL path 갱신
-   ```
-   stream copy라 영상 픽셀은 무손실, 1분 내 완료.
-
-이 세 점검을 EDL 작성 **전**에 한 번 돌리면 FCPXML 재시도 횟수가 크게 줄어든다.
-
-## Mode B — 스크립트 → 영상 (한국어 릴스/숏폼 기본 흐름)
-
-**풋티지 0, API 키 0.** Edge TTS 내레이션, Whisper 단어 타임스탬프, hyperframes 비주얼.
-
-### 입력
-
-`{id, text, voice?, rate?, pitch?}` 구조의 segments. 스크립트 .md/.txt를 segments.json으로 변환.
-
-```json
-{
-  "voice": "ko-KR-SunHiNeural",
-  "rate": "+15%",
-  "segments": [
-    { "id": "intro", "text": "안녕하세요, 오늘은..." },
-    {
-      "id": "body-1",
-      "text": "첫 번째 포인트는...",
-      "rate": "+5%",
-      "pitch": "-3Hz"
-    },
-    { "id": "cta", "text": "더 알고 싶으면..." }
-  ]
-}
-```
-
-per-segment 오버라이드가 top-level 기본값보다 우선.
-
-### 흐름
-
-1. **스크립트 파싱** → `./footage/edit/segments.json`.
-2. **Edge TTS 내레이션 일괄 생성** (병렬):
-   ```bash
-   ~/Developer/video-use/.venv/bin/python \
-     .claude/skills/motion-pipeline/helpers/batch_tts.py \
-     ./footage/edit/segments.json \
-     -o ./footage/edit/narration/
-   ```
-   `<id>.mp3` per segment + `manifest.json`(측정된 길이) 출력.
-3. **각 mp3를 단어 단위로 transcribe** (비주얼 동기화용):
-   ```bash
-   for f in footage/edit/narration/*.mp3; do
-     npx hyperframes transcribe "$f" --json --language ko \
-       --model large-v3 > "${f%.mp3}.words.json"
-   done
-   ```
-4. **hyperframes 합성물 병렬 작성** — segment마다 또는 Set 단위로 하나씩. 각 sub-agent(Agent tool, `general-purpose`):
-   - `cd hyperframes/<segment-id> && npx hyperframes init` (최초 1회)
-   - `index.html`을 GSAP/CSS 애니메이션으로 작성 — **3단계의 word-level timestamps에 맞춰** 등장/소멸 타이밍 결정
-   - 두 포맷 모두 렌더: `--format mov --codec prores4444 -o output/<id>.mov`(FCP 알파) + `-o output/<id>.mp4`(ffmpeg 번인용)
-5. **`./footage/edit/edl.json`** 작성 — segment별 mp3가 source, hyperframes 렌더가 overlay(전체 segment 길이를 덮음).
-6. **ffmpeg concat**으로 모든 segment 렌더 → `final.mp4`. 오디오는 내레이션 mp3들을 순서대로.
-7. EDL → 양 NLE 파일 export (`bash scripts/export_nle_files.sh`) → `timeline.fcpxml` + `timeline.xml`.
-
-### Edge TTS 보이스 치트시트 (한국어 우선)
-
-| 보이스                           | 성별 | 노트                                          |
-| -------------------------------- | ---- | --------------------------------------------- |
-| `ko-KR-SunHiNeural`              | F    | **기본**. 한국어 여성, 친근/긍정              |
-| `ko-KR-InJoonNeural`             | M    | 한국어 남성, 친근                             |
-| `ko-KR-HyunsuMultilingualNeural` | M    | 한국어 남성 + 문장 중간 영어 발음 가능        |
-| `en-US-AvaMultilingualNeural`    | F    | 한+영 자연스럽게. 외래어 많은 스크립트에 좋음 |
-| `en-US-AndrewMultilingualNeural` | M    | 위와 동일, 남성                               |
-
-톤 변화는 `--rate "+15%"`(빠르게/설명체), `--rate "-10%"`(느리게/사색조), `--pitch "-3Hz"`(낮게/Bridge용). Edge TTS는 자연어 스타일 디렉팅 미지원 → rate/pitch에 베이크.
-
-## 자막 수정 워크플로우 (Mode A/B 모두 — 옵션 1 정착 흐름)
-
-자막은 hyperframes 인포그래픽 mov(영상)이라 영상 내부 텍스트 직접 수정 불가. **단일 source of truth = `footage/edit/subtitles.srt`**, 명령 한 줄로 양 NLE 파일까지 자동 갱신.
-
-### 사용자가 자막 수정을 요청할 때 자동 흐름
-
-사용자 요청 패턴:
-
-- "자막 텍스트 수정해줘"
-- "5번 자막을 'XX'로 바꿔줘"
-- "자막 'YY' 부분 다시 만들어줘"
-- "자막에 오타 있어"
-
-→ **이 워크플로우를 자동 트리거**:
-
-```
-1. footage/edit/subtitles.srt 가 있으면 그대로 사용,
-   없으면 helpers/subtitles_to_srt.py 로 subtitles.json → SRT 먼저 export
-2. 사용자 요청 반영 (SRT 수정)
-3. bash scripts/rerender_subtitles.sh 실행
-   → SRT → JSON → index.html → 4K alpha mov 렌더 (5–15분)
-   → cut별 mov 분할 → EDL overlays 갱신
-   → timeline.fcpxml + timeline.xml 동시 export
-4. 완료 후 사용자에게 "NLE에서 timeline.{fcpxml|xml} 다시 import" 안내
-```
-
-검증만 빠르게 (렌더 안 함, 5초): `bash scripts/rerender_subtitles.sh --lint-only`
-
-### 디자인 자체 변경 (CSS 수정)
-
-자막 폰트/색/박스 스타일/모션을 바꾸려면 [helpers/build_subtitle_html.py](helpers/build_subtitle_html.py)의 `TEMPLATE` CSS를 수정. 매 재렌더 시 그 템플릿이 `hyperframes/index.html`을 덮어쓴다.
-
-수정 후 동일하게 `bash scripts/rerender_subtitles.sh` — 새 디자인 적용된 mov가 양 NLE 파일에 자동 반영.
-
-### 하이브리드 자막 (인포그래픽 + caption track 동시)
-
-NLE 안 텍스트 편집 인터페이스를 살리려면 EDL의 `overlays`(인포그래픽 mov 16개)와 `subtitles`(텍스트 51개)를 **둘 다** 채운다. 양 NLE 파일에 두 종류 자막이 모두 들어감:
-
-| 자막 종류                        | 위치      | 디자인                   | NLE 안 편집                                      |
-| -------------------------------- | --------- | ------------------------ | ------------------------------------------------ |
-| **V2 인포그래픽 mov** (overlays) | 정중앙    | 글래스모피즘 + GSAP 모션 | ❌ (영상이라 수정 불가, SRT → 재렌더)            |
-| **Caption track** (subtitles)    | 하단 중앙 | NLE 기본 자막 스타일     | ✅ 직접 편집 (FCP 자막 패널 / Premiere Captions) |
-
-EDL에 두 필드 같이 채우는 방식 (재렌더 후 또는 수동):
-
-```python
-edl["overlays"] = [...]   # 인포그래픽 mov 16개 (update_edl_overlays.py가 자동)
-edl["subtitles"] = [
-    {"start": p["start"], "end": p["end"], "text": p["text"]}
-    for p in subtitles_json
-]
-```
-
-이후 `bash scripts/export_nle_files.sh`로 양 NLE 파일 재생성. FCPXML은 `<caption lane="-1">` ITT track으로, Premiere XML은 caption 미지원이라 별도 SRT 활용.
-
-화면에 둘 다 보이는 게 부담스러우면 사용자가 NLE에서 V2 비활성화 또는 caption 비활성화로 선택.
-
-### Hard Rules (자막 워크플로우 한정)
-
-1. **subtitles.srt가 single source of truth** — JSON / index.html / mov는 모두 SRT에서 파생. 사용자가 SRT만 편집한다.
-2. **rerender_subtitles.sh가 진입점** — 개별 helper를 직접 호출하지 말고 항상 이 스크립트 사용 (6단계 + 양 NLE export 보장).
-3. **변경마다 양 NLE 파일 갱신** — Mode 무관, 자막이 바뀌면 timeline.fcpxml + timeline.xml 모두 신선해야 한다.
-4. **편집 영상과 자막은 미리 합성하지 않는다** — 항상 NLE 파일에 V1(영상)+V2(자막 mov) 청사진으로 두고 NLE가 import 시 합성.
-
-## 공통 단계
-
-### 모션그래픽 (공통)
-
-각 오버레이/타이틀/로어써드:
-
-- 병렬 sub-agent (Agent tool, `general-purpose`).
-- `cd hyperframes/<name> && npx hyperframes init`(최초) → HTML+CSS+GSAP 작성 → 두 포맷 렌더:
-  - `npx hyperframes render --format mov --codec prores4444 -o output/<name>.mov` (알파, FCP)
-  - `npx hyperframes render -o output/<name>.mp4` (ffmpeg 번인)
-- 사용 스킬: `hyperframes`(일반), `gsap`/`waapi`(애니메이션), `tailwind`(스타일), `lottie`/`three`(특수). 모두 `./hyperframes/.agents/skills/`에 깔려 있음.
-
-### EDL → 양 NLE 파일 (FCP + Premiere)
-
-매 iteration의 마지막 단계. **단일 명령으로 두 NLE 파일 동시 export**:
-
-```bash
-bash scripts/export_nle_files.sh
-```
-
-내부 동작:
-
-```
-edl.json  ─┬─→ edl_to_fcpxml.py    → footage/edit/timeline.fcpxml  (Final Cut Pro)
-           └─→ edl_to_fcp7_xml.py  → footage/edit/timeline.xml     (Premiere Pro, FCP7 XML)
-```
-
-두 파일 모두 EDL의 cuts(V1) + overlays(V2 자막 mov) + sources를 동일하게 표현. 어느 NLE 사용자든 동일한 작업물 받음.
-
-매 iteration마다 edl.json을 다시 emit하고 위 스크립트 재실행 — mp4와 양 NLE 파일이 항상 동기.
-
-#### NLE별 임포트 가이드
-
-| NLE               | 임포트                                  | 자막                                       |
-| ----------------- | --------------------------------------- | ------------------------------------------ |
-| **Final Cut Pro** | File → Import → XML → `timeline.fcpxml` | 자막 mov가 V2 connected clip으로 자동 포함 |
-| **Premiere Pro**  | File → Import → `timeline.xml`          | 자막 mov가 V2 트랙으로 자동 포함           |
-
-ProRes 4444 알파라 양 NLE 모두 자막 배경 자동 인식.
-
-## EDL 스키마
-
-`./footage/edit/edl.json` — 모든 편집 결정의 정전(canonical record). ffmpeg 합성과 FCPXML 둘 다 여기서 파생.
-
-```json
-{
-  "name": "프로젝트명",
-  "fps": 30,
-  "width": 1920,
-  "height": 1080,
-  "sources": [
-    {
-      "id": "s1",
-      "path": "/abs/clip1.mov",
-      "duration": 120.5,
-      "name": "take1",
-      "has_audio": true
-    }
-  ],
-  "cuts": [{ "source_id": "s1", "in": 12.34, "out": 18.56, "name": "intro" }],
-  "overlays": [
-    {
-      "path": "/abs/lower-third.mov",
-      "start": 5.0,
-      "duration": 3.0,
-      "lane": 1,
-      "name": "lower-third"
-    }
-  ],
-  "subtitles": [{ "start": 0.5, "end": 2.0, "text": "안녕하세요" }]
-}
-```
-
-- `cuts[].in/out` — **소스** 클립 내부 타임스탬프
-- `overlays[].start/duration` — **출력 타임라인** 타임스탬프 (cuts concat 후 기준)
-- `subtitles[].start/end` — 출력 타임라인 타임스탬프
-- 모든 path는 절대경로. 오버레이는 가능하면 ProRes 4444 .mov로 (FCP가 알파 받음).
-
-워크된 예시: [examples/edl.example.json](examples/edl.example.json).
-
-## Hard Rules (video-use에서 상속, 비협상)
-
-[.claude/skills/video-use/SKILL.md](../video-use/SKILL.md)의 12 Hard Rules가 무조건. 자주 깨지는 것들:
-
-- 자막은 필터 체인 **마지막** (모든 오버레이 다음)
-- per-segment extract → `-c copy` concat (단일 패스 filtergraph 금지)
-- 컷 경계마다 30ms `afade`
-- 오버레이는 `setpts=PTS-STARTPTS+T/TB`
-- word-level verbatim ASR만 (SRT/phrase 모드 금지)
-- 컷 전 사용자 평문 확인
-
-## CLI 치트시트
-
-```bash
-# hyperframes (Node 22+, Chrome, ffmpeg 필요)
-npx hyperframes init <name>
-cd hyperframes && npm run dev      # preview
-npx hyperframes render             # mp4
-npx hyperframes render --format mov --codec prores4444 -o output/<name>.mov  # FCP 알파
-npx hyperframes transcribe <file> --json --language ko --model large-v3       # 로컬 Whisper
-npx hyperframes add <block>        # 레지스트리 블록 (lower-third 등) 설치
-npx hyperframes catalog            # 50+ 블록 브라우즈
-npx hyperframes doctor             # 환경 체크
-
-# Mode B — Edge TTS 일괄 내레이션 (무료, 키 불필요)
-~/Developer/video-use/.venv/bin/python \
-  .claude/skills/motion-pipeline/helpers/batch_tts.py segments.json -o narration/
-
-# Mode A — ElevenLabs Scribe (옵션, .env에 ELEVENLABS_API_KEY 필요)
-~/Developer/video-use/.venv/bin/python ~/Developer/video-use/helpers/transcribe.py <file>
-~/Developer/video-use/.venv/bin/python ~/Developer/video-use/helpers/timeline_view.py <file>
-
-# EDL → 양 NLE 파일 (양 모드, 단일 명령)
-bash scripts/export_nle_files.sh
-#   → footage/edit/timeline.fcpxml  (Final Cut Pro)
-#   → footage/edit/timeline.xml     (Premiere Pro, FCP7 XML)
-
-# 개별 helper 호출 (필요 시)
-~/Developer/video-use/.venv/bin/python \
-  .claude/skills/motion-pipeline/helpers/edl_to_fcpxml.py edl.json -o timeline.fcpxml
-~/Developer/video-use/.venv/bin/python \
-  .claude/skills/motion-pipeline/helpers/edl_to_fcp7_xml.py edl.json -o timeline.xml
-```
-
-## 환경변수
-
-**Mode B는 키 0개.** Edge TTS와 hyperframes Whisper 모두 무료, 키 불필요.
-
-`ELEVENLABS_API_KEY`는 **Mode A에서 Scribe를 명시적으로 선택할 때만** 필요. `~/Developer/video-use/.env`에 설정.
-
-## 셋업 (이 repo는 이미 완료)
-
-1. `brew install ffmpeg uv git-lfs yt-dlp`
-2. `git clone https://github.com/browser-use/video-use ~/Developer/video-use`
-3. `cd ~/Developer/video-use && uv sync`
-4. `cd ~/Developer/video-use && uv pip install -r /path/to/repo/.claude/skills/motion-pipeline/helpers/requirements.txt` — edge-tts를 video-use venv에 추가
-5. `ln -sfn ~/Developer/video-use .claude/skills/video-use` — 프로젝트 로컬 스킬 등록
-6. `cd hyperframes && npm install` (npx 베이스라 의존성은 거의 없음, package-lock만 잡음)
-7. (Optional, Mode A Scribe) `~/Developer/video-use/.env`에 `ELEVENLABS_API_KEY=...`
-
-`git pull` 후 `~/Developer/video-use/`에서 step 4 재실행 — venv에 edge-tts 복원.
+# 범용 AI 영상 편집 (FFmpeg + Whisper + yt-dlp · Windows / macOS 호환)
+
+편집 프로그램 없이 로컬 CLI 도구(`ffmpeg`, `ffprobe`, `faster-whisper`, `yt-dlp`, `python3`)와 자동 선택 모션그래픽만으로 영상을 분석·편집·검증해 완성 파일(`edit/final.mp4`)을 만든다. **기본은 무료 / 로컬 / API 키 0개.**
+
+## 0. 핵심 철학: 스킬에 얽매이지 말고 더 나은 방향으로 판단하라
+
+- **Hard Rules만 필수, 나머지는 전부 출발점이다**: 이 문서의 수치·절차·자막 규칙·분석 방법은 실패를 줄이기 위한 기본값일 뿐 족쇄가 아니다.
+- **스스로 생각하고 더 나은 방식을 택하라**: 영상의 성격(강의, 브이로그, 숏폼, 인터뷰, 화면녹화, 시네마틱 등)과 목적을 먼저 파악하고, 이 문서보다 **더 나은 편집 구성·연출 기법·파라미터·처리 방식**이 있다면 기계적으로 따르지 말고 스스로 판단해 개선한다.
+  - 예: J-cut/L-cut, 점프컷 펀치인 줌, 화면 분할/PIP, 속도 램프, 프리즈 프레임, 오디오 노이즈 제거/덕킹, 핵심 키워드 강조 자막, 인트로 훅 재배치 등 `ffmpeg`와 `python3`로 구현 가능한 기법은 허락을 기다리지 말고 적극 활용한다.
+  - **기술적으로 명백히 더 나은 선택**(더 안정적인 필터, 더 자연스러운 컷 타이밍, 더 빠른 처리)은 바로 적용하고 이유를 짧게 공유한다.
+  - **연출·구성 방향을 크게 개선할 아이디어**가 떠오르면 Step 3 편집 계획에 **"AI 추천 개선안"**으로 함께 제안한다.
+- **원본 보존**: 원본 영상 파일은 절대 덮어쓰지 않는다. 모든 중간 파일과 산출물은 `<영상 폴더>/edit/`에 저장한다.
+- **OS 호환 최우선 (Windows / macOS / Linux)**:
+  - 셸 문법 차이(PowerShell / cmd / bash / zsh)로 인한 오류를 피하기 위해, 파싱·계산·파일 조작·`ffmpeg` 호출은 가급적 **임시 Python 스크립트(`.py`)로 작성해 실행**한다.
+  - 모든 경로는 `pathlib.Path`로 다루고, 임시 작업 폴더는 `/tmp`를 하드코딩하지 말고 `tempfile.gettempdir()` 아래 `video_edit_work`를 사용한다.
+  - Windows의 `cp949` 인코딩 오류를 막기 위해 모든 파일 읽기/쓰기와 `subprocess` 호출에 **`encoding="utf-8"`**을 명시한다(`PYTHONUTF8=1`).
+  - `ffmpeg`의 `subtitles`/`ass` 필터와 `concat` 리스트 파일은 Windows 드라이브 문자(`C:\`) 및 백슬래시 이스케이프 오류를 막기 위해, **반드시 작업 폴더로 `cwd`를 이동한 뒤 상대 파일명(`subtitles=final.srt`, `file 'seg_000.mp4'`)으로 전달**한다.
+
+---
+
+## 1. 의존성 자동 점검 및 설치 (없으면 설치 후 진행)
+
+작업을 시작하기 전 현재 OS(`Windows` / `macOS` / `Linux`)를 판별하고 필요한 항목을 순서대로 점검한다. **누락된 도구가 있으면 직접 설치한 뒤 버전/임포트를 재확인하고 다음 단계로 넘어간다.**
+
+1. **`ffmpeg` & `ffprobe`** (`shutil.which("ffmpeg")` 확인):
+   - **macOS**: `brew install ffmpeg`
+   - **Windows**: `winget install -e --id Gyan.FFmpeg --accept-source-agreements --accept-package-agreements` (winget 불가 시 `choco install ffmpeg -y` 또는 `scoop install ffmpeg`)
+     - *Windows 주의*: 방금 설치한 `ffmpeg`가 현재 터미널 `PATH`에 즉시 반영되지 않을 수 있다. 설치 후에도 `which`로 안 잡히면 시스템/사용자 환경변수 `PATH`와 일반 설치 경로(`%LOCALAPPDATA%\Microsoft\WinGet\Packages`, `C:\ffmpeg\bin` 등)를 조회해 현재 프로세스 `PATH`에 추가하거나 실행 파일 절대경로를 직접 사용한다.
+   - **Linux**: `sudo apt-get update && sudo apt-get install -y ffmpeg`
+2. **Python 3** (`python3` 또는 Windows `python` / `py -3` 확인):
+   - 없으면 macOS `brew install python`, Windows `winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements`로 설치.
+3. **Whisper (`faster-whisper`) 전용 가상환경**:
+   - 시스템 Python 충돌(PEP 668 등)을 막기 위해 전용 가상환경 경로(`Path.home() / ".video-edit-venv"`)를 사용한다. 이미 `faster-whisper`가 동작하는 Python/가상환경(예: `~/.local/share/nle-auto-edit/venv`)이 있으면 그대로 재사용한다.
+   - 없으면 가상환경 생성 후 설치:
+     - macOS/Linux: `<venv>/bin/pip install --upgrade pip && <venv>/bin/pip install faster-whisper "av<16"`
+     - Windows: `<venv>\Scripts\pip.exe install --upgrade pip && <venv>\Scripts\pip.exe install faster-whisper "av<16"`
+   - *주의*: `faster-whisper`는 PyAV 16+에서 실패하는 버전이 있으므로 **`av<16`**을 함께 고정한다. `whisper.cpp`는 세그먼트 첫 단어 밀림 버그가 있어 사용하지 않는다.
+4. **`yt-dlp` (레퍼런스 URL이 주어진 경우에만 점검·설치)**:
+   - `shutil.which("yt-dlp")` 또는 전용 가상환경의 `python -m yt_dlp --version`으로 확인한다.
+   - 없으면 전용 가상환경에 설치하는 것이 OS 무관하게 가장 안정적이다:
+     - macOS/Linux: `<venv>/bin/pip install -U yt-dlp` (또는 `brew install yt-dlp`)
+     - Windows: `<venv>\Scripts\pip.exe install -U yt-dlp` (또는 `winget install -e --id yt-dlp.yt-dlp --accept-source-agreements --accept-package-agreements`)
+5. **모션그래픽 도구 (모션그래픽 생성이 필요한 경우에만 점검·설치)**:
+   - 단순 그래픽(Pillow/SVG): 전용 가상환경에 `pip install pillow` (필요 시 `matplotlib`)
+   - 웹 기반 고퀄 모션(`Hyperframes` / `Remotion`): `node --version`(Node 20+) 확인 → 없으면 macOS `brew install node`, Windows `winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements`. Hyperframes는 별도 설치 없이 `npx --yes hyperframes`로 실행 가능.
+   - *권한/네트워크로 자동 설치가 막힌 경우*: 실패 원인과 사용자가 복붙할 정확한 1줄 설치 명령어를 안내하고 중단한다.
+
+---
+
+## 2. 작업 절차
+
+### Step 1. 소스 사전 점검 (`ffprobe`)
+1. 영상의 해상도(가로 16:9 / 세로 9:16), FPS(NTSC `29.97`/`23.976` 포함), 길이, 오디오 스트림 유무, 타임코드 메타데이터를 확인한다.
+2. 아래 문제가 있으면 `tempfile.gettempdir()/video_edit_work/source.mp4`에 무손실 사본을 만들어 작업 소스로 사용한다:
+   - 경로/파일명에 한글(macOS NFD 깨짐 포함), 공백, 특수문자(`'`, `:`, `[`, `]`)가 있는 경우
+   - 카메라(DJI/GoPro 등)가 `00:00:00:00`이 아닌 타임코드를 박아 둔 경우:
+     `ffmpeg -y -i "<원본>" -c copy -map_metadata -1 -timecode 00:00:00:00 "<임시경로>/source.mp4"`
+
+### Step 2. 오디오 우선 분석
+- **무음 감지 (`ffmpeg silencedetect`)**:
+  - 기본값: `-30dB` 이하, `2.0초` 이상 무음, 컷 양끝 패딩 `0.08초`, 패딩 후 `0.3초` 미만 컷은 무시.
+  - 사용자가 수치("n dB 이하", "n초 이상")를 지정하면 그대로 반영한다.
+- **음성인식 (Whisper — 단어 단위 타임스탬프 필수)**:
+  - `faster-whisper` (`word_timestamps=True`)를 사용한다.
+  - 실행 장치 자동 선택: `("cuda", "float16")` → 실패 시 `("cpu", "int8")`로 자동 폴백한다(Windows NVIDIA GPU 자동 가속, CPU 환경 안전 동작).
+  - 모델 선택: GPU 있거나 정확도 우선이면 `large-v3`, CPU에서 속도 우선이면 `medium` (모델 첫 다운로드가 1GB 이상 걸릴 수 있음을 사전 안내).
+  - 서브워드는 공백 기준으로 어절 단위 `[{start, end, text}, ...]`로 합쳐 `edit/words.json`에 저장·캐싱한다. 같은 소스 오디오면 재인식하지 않는다.
+
+### Step 3. 편집 계획 확인 (컷 실행 전)
+- 컷 실행 전에 **평문 요약**을 먼저 보여주고 확인을 받는다:
+  - 원본 길이 / 감지된 컷(무음·불필요 구간) 수 / 예상 결과 길이 / 자막·모션그래픽 및 추가 편집 계획
+  - 레퍼런스가 있는 경우: 레퍼런스 분석 결과(`edit/ref_style.json`)와 원본 적용 매핑표(컷 템포·비율·색감·자막 디자인·모션그래픽·오디오 톤) 포함
+  - 더 나은 연출 아이디어가 있으면 **"AI 추천 개선안"**을 함께 제시한다.
+- 사용자가 이미 구체 조건과 함께 "바로 진행해줘"라고 했거나, 피드백 재조정 단계에서는 되묻지 않고 즉시 실행한다.
+
+### Step 4. 편집 실행 (`edit/edl.json` → `edit/final.mp4`)
+- 모든 편집 결정(남길 구간 `keep_ranges`, 오버레이, 자막, 효과)을 `edit/edl.json`에 기록한 뒤 `ffmpeg`로 실행한다.
+- **자막은 컷 완료 후 최종 타임라인 기준**으로 만든다(컷 전 기준이면 `output_time = word.start - seg_in + seg_offset`으로 정확히 변환하거나, 컷 완료된 영상의 오디오를 추출해 Whisper를 돌린다).
+- *(선택)* 사용자가 Final Cut Pro / Premiere Pro용 타임라인 파일(`timeline.fcpxml` / `timeline.xml`)을 요청하면 레포의 `scripts/export_nle_files.sh` 또는 `.claude/skills/motion-pipeline/helpers/edl_to_*.py`를 활용할 수 있다.
+
+### Step 5. 필수 검증 ("에러 없음 ≠ 완료")
+결과를 보고하기 전에 아래 3가지를 반드시 직접 확인한다:
+1. **메타데이터 검증 (`ffprobe`)**: 결과 파일의 총 길이(예상 길이와 오차 확인), 해상도, FPS, 오디오 스트림 존재 여부 확인.
+2. **자막 검증**: SRT/ASS의 총 큐 수, 평균 글자 수, 평균 표시 시간, 마지막 타임스탬프가 영상 길이를 넘지 않는지 확인.
+3. **시각 검증**: 시작·중간·컷 직후·자막/모션그래픽이 떠 있는 시점에서 `ffmpeg`로 프레임을 PNG 추출해 직접 열어 확인한다(한글 깨짐/네모 박스, 자막 잘림, 화면 비율 왜곡, 오버레이 가림 여부). 레퍼런스가 있었다면 **레퍼런스 대표 프레임과 결과물 프레임을 나란히 비교**해 색감·자막 위치/스타일·구도가 일치하는지 확인하고 차이가 크면 보정한다.
+
+---
+
+## 2-1. 레퍼런스 영상 분석 및 스타일 적용 (레퍼런스가 제공된 경우)
+
+사용자가 레퍼런스 영상(유튜브·쇼츠·릴스·틱톡 URL 또는 로컬 파일)을 함께 제시하면, Step 2와 Step 3 사이에 아래 절차를 수행한다.
+
+### R1. 레퍼런스 확보 (`yt-dlp`)
+- URL이면 `tempfile.gettempdir()/video_edit_work/ref/reference.mp4`로 다운로드한다:
+  - `python -m yt_dlp -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best" --merge-output-format mp4 -o "<임시경로>/ref/reference.mp4" "<URL>"`
+- 로컬 파일이면 그대로 분석 소스로 사용한다.
+- 다운로드가 로그인·연령 제한·플랫폼 차단으로 막히면 우회하지 말고 사용자에게 로컬 영상 파일을 직접 전달해 달라고 요청한다.
+
+### R2. 프레임별 & 편집 리듬 정밀 분석
+1. **기본 스펙 & 오디오 톤 (`ffprobe` / `ffmpeg`)**:
+   - 해상도·비율(16:9, 9:16 등), FPS, 총 길이, 오디오 라우드니스(`loudnorm=print_format=json`) 측정.
+2. **컷 리듬(ASL) & 씬 전환 추출**:
+   - `ffmpeg -i reference.mp4 -vf "select='gt(scene,0.3)',showinfo" -f null -` 로 장면 전환 타임스탬프를 수집해 평균 컷 길이(초), 초반 3~5초 훅 템포, 컷 빈도를 수치화한다.
+   - `silencedetect`로 레퍼런스의 무음 허용치(얼마나 타이트하게 잘랐는지)를 파악한다.
+3. **프레임별 시각 추출 (`ffmpeg` 4x4 그리드 + 핵심 프레임)**:
+   - 영상 길이에 맞춰 일정 간격(1분 이하 숏폼은 `0.5~1초`, 그 이상은 `1~2초` 간격)과 씬 전환 직후 프레임을 추출하고, `tile=4x4`로 **프레임 그리드 시트(`ref_grid_001.png`, ...)**를 생성한다.
+   - 자막 디자인·색감·레이아웃·모션그래픽을 정확히 읽기 위해 대표 프레임 3~5장은 원본 해상도 PNG로도 별도 저장한다.
+4. **시각 분석 → `edit/ref_style.json` 저장**:
+   - 추출한 그리드와 대표 프레임을 직접 열어 눈으로 확인한 뒤 아래 5개 축을 구조화해 `edit/ref_style.json`에 기록한다:
+     - **화면 구도/모션**: 비율, 크롭/여백/블러 배경, 점프컷 펀치인 줌 패턴(예: 컷마다 100%↔108% 교차)
+     - **색감/톤**: 밝기·대비·채도·색온도, 어두운 그라데이션/비네팅 여부
+     - **자막 & 모션그래픽 스타일**: 위치(Y좌표 비율), 줄 수(1줄/2줄), 글자 크기·굵기·색상, 외곽선/그림자/배경 박스, 강조 키워드 색, 타이틀·로어써드·인포그래픽 스타일
+     - **컷 템포/전환**: 평균 컷 길이, 무음 컷 기준, 페이드/전환 스타일
+     - **오디오**: 목표 라우드니스(LUFS), 말속도/배속 느낌, BGM 비중
+
+### R3. 원본 영상 적용 원칙
+- **스타일만 적용, 콘텐츠 복제 금지**: 레퍼런스의 편집 문법·리듬·레이아웃·자막 디자인·색감 톤만 원본 영상에 반영하며, 레퍼런스의 원본 영상·음성·문구·워터마크는 절대 사용하지 않는다.
+- **기계적 모방보다 재해석 우선**: 레퍼런스 요소를 그대로 베끼는 것이 원본 영상에 어색하다면, 원본의 구도·화자·메시지에 더 잘 어울리도록 과감히 재해석하고 발전시킨다.
+- **구현 매핑 투명화**: `ffmpeg` + ASS 자막 + 모션그래픽(아래 2-2절)으로 재현 가능한 요소는 구체 파라미터와 도구 선택 근거를 매핑해 보여준다.
+
+---
+
+## 2-2. 모션그래픽 자동 생성 (3단계 자동 선택)
+
+타이틀 카드, 로어써드(이름표), 강조 인포그래픽, 키네틱 타이포, 차트 등 모션그래픽이 필요하거나 레퍼런스에서 감지된 경우, **요청 난이도와 현재 PC 환경에 따라 아래 3단계 중 가장 적합한 방식을 스스로 선택**해 제작하고 `ffmpeg`로 합성한다.
+
+| 단계 | 도구 | 언제 선택하는가 |
+|---|---|---|
+| **1단계 (경량·초고속)** | **Python(`Pillow`/`SVG`) + `ffmpeg`** | 타이틀 카드, 로어써드, 강조 박스, 화살표, 간단한 숫자 카운터·차트, 페이드/슬라이드/팝인 오버레이 |
+| **2단계 (고퀄 웹 모션·기본 권장)** | **`Hyperframes` (`npx hyperframes`)** | 글래스모피즘 카드, 키네틱 타이포, 부드러운 GSAP 이징·모션, 레퍼런스 스타일의 세련된 인포그래픽 (단일 `index.html` + CSS + GSAP) |
+| **3단계 (대형·React 기반)** | **`Remotion`** | 영상 전체가 풀 모션그래픽이거나, 복잡한 멀티씬·데이터 기반 차트·스프링 물리 애니메이션, 또는 사용자가 Remotion을 지정한 경우 |
+
+- **폴백 원칙**: Node.js/Chrome 환경이 없거나 설치가 막히면 2·3단계 대신 1단계(`Python + ffmpeg`)로 가장 깔끔하게 대체 구현하고 그 사실을 공유한다.
+- **렌더 & 합성 규칙**:
+  - 모션그래픽 캔버스는 **원본 출력 영상과 동일한 해상도·비율(16:9 / 9:16)·FPS**로 맞춘다.
+  - 영상 위에 얹는 오버레이는 **투명 배경(알파 채널)**으로 렌더한다(`ProRes 4444 .mov` 또는 `yuva420p .webm` / RGBA PNG 시퀀스).
+  - `ffmpeg`로 합성할 때는 반드시 `setpts=PTS-STARTPTS+T/TB`로 노출 시작 시점을 맞추고, **자막보다 먼저** 얹는다(단, 모션그래픽 자체가 자막 역할을 할 때는 예외).
+  - **시각 검증 필수**: 모션그래픽 단독 렌더 직후 + 최종 합성 직후 모두 **애니메이션 진행 중간 시점의 프레임**을 PNG 추출해 글자 깨짐·잘림·투명 배경 정상 여부·레퍼런스 톤 일치 여부를 눈으로 확인한다.
+
+---
+
+## 3. 최소 안전장치: Hard Rules (이것만 지키면 구현은 자유)
+
+아래 6가지는 어기면 결과물이 조용히 망가지는 품질 안전장치다. **이 원칙만 지킨다면 구체적인 필터 구성이나 구현 방식은 더 나은 방법으로 자유롭게 최적화해도 된다.**
+
+1. **단일 패스 통짜 filtergraph로 다중 컷 금지**: 구간이 여러 개면 **세그먼트별 추출 → `-c copy` concat**(동일 코덱·FPS·샘플레이트로 추출한 세그먼트를 상대경로 `concat-list.txt`로 무손실 병합)으로 A/V 싱크 밀림과 중복 인코딩을 막는다.
+2. **모든 컷 경계에 30ms 오디오 페이드**: 각 세그먼트 앞뒤에 `afade=t=in:st=0:d=0.03,afade=t=out:st={dur-0.03}:d=0.03`을 적용해 컷 지점의 틱/팝 잡음을 없앤다.
+3. **단어 중간 절단 금지 + 패딩**: 컷 경계는 반드시 Whisper 단어 경계에 스냅하고, 양끝에 `0.05~0.15초`(기본 `0.08초`) 여유 패딩을 둔다.
+4. **자막은 필터 체인 맨 마지막에 번인**: 리사이즈·크롭·컬러 보정·오버레이가 모두 끝난 뒤에 자막을 얹는다.
+5. **오버레이 타이밍 보정**: 이미지/영상 오버레이 입력에는 `setpts=PTS-STARTPTS+T/TB`를 적용한다.
+6. **OS별 한글 폰트 명시**: 자막 번인 시 시스템에 실제 설치된 한글 폰트를 확인해 지정한다(네모 깨짐 방지).
+   - **Windows**: `Malgun Gothic` (기본 내장), `Pretendard`, `Noto Sans KR`, `NanumGothic`
+   - **macOS**: `AppleSDGothicNeo`, `AppleGothic`, `Pretendard`, `Noto Sans KR`
+   - **Linux**: `Noto Sans CJK KR`, `NanumGothic`
+
+---
+
+## 4. 한국어 자막 분할 가이드 (기본 출발점 — 영상에 맞게 자유 조정)
+
+별도 스타일 지정이나 레퍼런스가 없을 때 아래 쉼 기반 1줄 자막을 기본값으로 사용한다. **영상 성격이나 레퍼런스에 더 어울리는 방식(2줄 자막, 단어별 팝업/강조, 상단 타이틀+하단 자막 등)이 있다면 그쪽을 우선한다.**
+
+- **말할 때만 표시(쉼 기반)**: 인접 어절 간 간격이 `gap`(기본 `0.4초`) 이상이면 자막을 끊고, 종료 시각을 `마지막 단어 끝 + 0.2초`(다음 단어 시작 `-0.03초`를 넘지 않게)로 닫아 쉼 구간엔 화면을 비운다. 같은 발화 덩어리 안에서는 다음 자막 시작에 연속 연결한다.
+- **1줄 고정 & 비율별 길이**:
+  - 가로(16:9): 소프트 상한 `16자` (하드 상한 `24자`)
+  - 세로(9:16): 소프트 상한 `12~14자` (하드 상한 `+8자`)
+- **어색한 끊어읽기 금지**:
+  - 의존명사(`수, 것, 거, 게, 때, 줄, 등, 들, 점, 중, 후, 전, 데, 만큼, 뿐, 분, 개, 명, 번`)와 보조·연결 표현(`하는, 한, 할, 해서, 하고, 있는, 있다, 없는, 같은, 위해, 통해, 대해`) 앞에서는 끊지 않는다.
+  - 관형어·부사(`그, 이, 저, 한, 두, 세, 매우, 아주, 정말, 너무, 좀, 막, 딱, 그냥, 더, 덜, 꼭, 잘`) 뒤에서는 끊지 않는다.
+  - 문장부호(`.?!,`) 및 연결어미(`고, 며, 면, 서, 데, 만, 나, 까, 요, 죠, 는데, 지만, 어서, 아서, 거나, 니까`) 뒤에서 우선 끊는다.
+- **최소 표시 0.5초 보장**: `0.5초` 미만 자막은 같은 발화 덩어리면 앞 자막에 병합하고, 고립 구간이면 종료 시각을 연장해 깜빡임을 막는다.
+
+---
+
+## 5. 사용자 피드백 시 즉시 재조정 규칙
+
+기본값은 출발점일 뿐이다. 사용자가 수정 요청을 하면 "다시 해드릴까요?"라고 되묻지 말고, **변경한 파라미터를 밝히며 즉시 재실행한 뒤 전/후 수치 비교**(예: 컷 18개→11개, 자막 42개→29개, 평균 표시 1.1초→1.8초)를 보고한다.
+
+| 사용자 피드백 | 즉시 조정할 값 |
+|---|---|
+| "너무 많이 잘렸어" / "말이 끊겨" | 무음 기준 낮춤(`-30 → -40dB`), 최소초 ↑, 패딩 늘림(`0.08 → 0.15초`) |
+| "덜 잘렸어" / "빈 곳이 남아" | 무음 기준 높임(`-30 → -25dB`), 최소초 ↓(`2.0 → 0.5초`) |
+| "숨소리까지 빼줘" | `-40dB` / `0.3초`로 공격적 적용 |
+| "자막이 너무 짧게 끊겨" | `soft` ↑(`16 → 24`), `gap` ↑(`0.4 → 0.7초`) |
+| "한 줄이 너무 길어" | `soft` ↓(`16 → 12`) |
+| "말이 끝날 때까지 붙여줘" | `gap` ↑(`0.4 → 1.0초`) |

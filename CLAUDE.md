@@ -4,165 +4,61 @@
 
 이 repo에는 **두 갈래**가 있습니다.
 
-| 갈래                                  | 위치                                   | 하는 일                                                               |
-| ------------------------------------- | -------------------------------------- | --------------------------------------------------------------------- |
-| **편집 프로그램 없이** (기본)         | `.claude/skills/motion-pipeline/`      | ffmpeg·hyperframes로 `final.mp4` 직접 생성 (+ NLE용 XML)              |
-| **편집 프로그램 사용** (nle-auto-edit) | [`nle-auto-edit/`](nle-auto-edit/README.md) | Claude가 Premiere / CapCut / Final Cut을 직접 조작해 그 안에서 편집 |
+| 갈래                                   | 위치                                             | 하는 일                                                                                |
+| -------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| **편집 프로그램 없이** (기본)          | `.claude/skills/motion-pipeline/SKILL.md`        | `ffmpeg` + `faster-whisper` + `yt-dlp` + 3단계 모션그래픽으로 `final.mp4` 직접 생성    |
+| **편집 프로그램 사용** (`nle-auto-edit`) | [`nle-auto-edit/`](nle-auto-edit/README.md)      | Claude가 Premiere / CapCut / Final Cut을 직접 조작해 그 안에서 편집                    |
 
 ## 어느 갈래로 갈지 — 묻지 않는다
 
-- **기본은 "편집 프로그램 없이"다.** "이 영상 편집해줘", "무음 잘라줘", "자막 달아줘"처럼 프로그램을 말하지 않은 요청은
-  편집 프로그램을 쓸지 묻지 않고 이 갈래(motion-pipeline)로 처리한다.
-- **사용자가 프로그램 이름을 말할 때만** 편집 프로그램 갈래로 간다 ("프리미어로…", "캡컷 자막…", "파이널컷으로…").
-  그 요청 하나만 그 프로그램으로 처리한다. 다음 요청에 이름이 없으면 다시 기본 갈래다.
+- **기본은 "편집 프로그램 없이"다.** "이 영상 편집해줘", "무음 잘라줘", "자막 달아줘", "이 레퍼런스처럼 편집해줘"처럼 프로그램을 말하지 않은 요청은 편집 프로그램을 쓸지 묻지 않고 `.claude/skills/motion-pipeline/SKILL.md` 절차로 처리한다.
+- **사용자가 프로그램 이름을 말할 때만** 편집 프로그램 갈래로 간다("프리미어로…", "캡컷 자막…", "파이널컷으로…"). 그 요청 하나만 그 프로그램으로 처리한다. 다음 요청에 이름이 없으면 다시 기본 갈래다.
 
 **편집 프로그램 갈래로 갈 때 (스킬이 아직 없으면):**
 
 1. `bash nle-auto-edit/install.sh <premiere|capcut|finalcut>` 실행 → `~/.claude/skills/`에 코어(`ai-video-edit`)와 해당 어댑터를 설치하고, 필요한 도구(Node·ffmpeg·faster-whisper 등)가 없으면 설치한다. Windows에서 Premiere면 `powershell -ExecutionPolicy Bypass -File nle-auto-edit\install.ps1`.
-2. 프로그램별 추가 설정을 [nle-auto-edit/README.md](nle-auto-edit/README.md)의 해당 절대로 안내 (Premiere는 Claude 재시작 후 그 작업 폴더에서 "프리미어 연결해줘" → `premiere-mcp-setup` 스킬, Final Cut은 `fcp-mcp` 등록, CapCut은 추가 설정 없음).
-3. "Claude를 재시작해야 스킬이 로드됩니다" 안내. 이 갈래에서는 아래 "첫 진입 시 자동 점검"(video-use 셋업)을 하지 않는다.
+2. 프로그램별 추가 설정을 [nle-auto-edit/README.md](nle-auto-edit/README.md)의 해당 절대로 안내(Premiere는 Claude 재시작 후 그 작업 폴더에서 "프리미어 연결해줘" → `premiere-mcp-setup` 스킬, Final Cut은 `fcp-mcp` 등록, CapCut은 추가 설정 없음).
+3. "Claude를 재시작해야 스킬이 로드됩니다" 안내.
 
-## 첫 진입 시 자동 점검 (편집 프로그램 없이 갈래)
+## 편집 프로그램 없이 갈래 — 핵심 원칙
 
-편집 프로그램 없이 처리할 작업을 시작하기 전에:
+자세한 전체 절차와 규칙은 [`.claude/skills/motion-pipeline/SKILL.md`](.claude/skills/motion-pipeline/SKILL.md)가 정전(single source of truth)이다.
 
-1. `~/Developer/video-use` 가 존재하지 않으면 → "셋업이 필요합니다. `bash scripts/setup.sh` 를 실행해 주세요" 안내.
-2. `.claude/skills/video-use` 심볼릭이 깨졌으면 → setup.sh 재실행 권장.
-3. `~/Developer/video-use/.venv/bin/python -c "import edge_tts"` 실패하면 → setup.sh 재실행.
+- **사전 셋업 불필요 (Windows / macOS / Linux 자동 설치)**: 별도 `setup.sh`나 외부 `~/Developer/video-use` 클론 없이, 에이전트가 작업 시작 시 `ffmpeg`, `Python 3`, 전용 가상환경(`~/.video-edit-venv`)의 `faster-whisper`(`av<16`), 그리고 필요 시 `yt-dlp` / 모션그래픽 도구를 자동 점검·설치한다.
+- **프롬프트에 얽매이지 않는 자율 판단**: 6개 Hard Rules(안전장치)만 필수이며, 나머지 수치·연출·구성은 영상 성격에 맞게 AI가 더 나은 방향으로 판단·제안한다.
+- **레퍼런스 분석·적용**: 레퍼런스 URL(유튜브·쇼츠·릴스 등)이 주어지면 `yt-dlp`로 다운로드 → `ffmpeg` 4x4 프레임 그리드 & 씬 전환 분석(`edit/ref_style.json`) → 원본 영상에 스타일만 재해석해 적용하고 프레임 나란히 시각 검증한다.
+- **모션그래픽 3단계 자동 선택**: 난이도와 환경에 따라 `1단계 Python(Pillow/SVG)+ffmpeg` / `2단계 Hyperframes(npx hyperframes)` / `3단계 Remotion` 중 최적 도구를 스스로 고른다.
+- **원본 보존 & OS 안전 경로**: 원본은 절대 덮어쓰지 않고 `<영상 폴더>/edit/`에 산출물(`edl.json`, `words.json`, `final.mp4` 등)을 저장한다. Windows `cp949`·드라이브 콜론 이스케이프·macOS 한글 NFD·DJI/GoPro 비0 타임코드 문제를 사전 회피한다.
 
-setup.sh는 멱등이라 여러 번 실행해도 안전합니다.
+## 6개 Hard Rules (비협상 안전장치)
 
-## 두 모드 트리거
-
-| 사용자 요청 패턴                                     | 모드  | 트리거                                        |
-| ---------------------------------------------------- | ----- | --------------------------------------------- |
-| "footage 영상 편집…" / 영상 파일이 `footage/`에 있음 | **A** | motion-pipeline 스킬 → video-use 흐름         |
-| "이 스크립트로 영상 만들어줘" / 텍스트만 있음        | **B** | motion-pipeline 스킬 → Edge TTS + hyperframes |
-
-## 핵심 컨벤션
-
-- **풋티지 위치**: `footage/` (사용자가 다른 경로 지정 가능). 출력은 `<dir>/edit/`.
-- **모션그래픽**: `hyperframes/<segment-id>/`에 segment마다 또는 컴포지션 단위로.
-- **EDL이 정전(canonical)**: 모든 편집 결정은 `footage/edit/edl.json`에 기록. ffmpeg 합성과 FCPXML 둘 다 여기서 파생.
-- **Dual deliverable**: `final.mp4` + `timeline.fcpxml` 두 산출물 항상 생성.
-- **Hard Rules**: video-use SKILL.md의 12가지 규칙은 비협상. 자주 깨지는 것:
-  - 자막은 필터 체인 마지막
-  - per-segment extract → `-c copy` concat
-  - 컷 경계마다 30ms `afade`
-  - 오버레이는 `setpts=PTS-STARTPTS+T/TB`
-  - word-level verbatim ASR만
-  - 컷 전 사용자 평문 확인
+1. 단일 패스 통짜 filtergraph 다중 컷 금지 → 세그먼트별 추출 후 `-c copy` concat
+2. 모든 컷 경계에 30ms `afade`
+3. Whisper 단어 경계 스냅 + 50~150ms 패딩(단어 중간 절단 금지)
+4. 자막은 필터 체인 맨 마지막에 번인
+5. 오버레이 입력은 `setpts=PTS-STARTPTS+T/TB` 적용
+6. OS별 실제 설치된 한글 폰트 명시(Windows `Malgun Gothic`, macOS `AppleSDGothicNeo` 등)
 
 ## 비용
 
-기본 워크플로우는 **API 키 0개, 비용 0**:
+기본 워크플로우는 **API 키 0개, 비용 $0**:
 
-- hyperframes Whisper(`npx hyperframes transcribe`) — 로컬, 무료
-- Edge TTS — Microsoft 공개, 무료
-- ffmpeg — 로컬
-
-ElevenLabs Scribe는 **다중 화자 분리 / 한국어 필러 자동컷이 핵심**일 때만 선택. `~/Developer/video-use/.env` 에 키 입력.
+- `ffmpeg` / `ffprobe` — 로컬
+- `faster-whisper` — 로컬 (NVIDIA CUDA 자동 가속, CPU `int8` 폴백)
+- `yt-dlp` — 로컬 (레퍼런스 URL 다운로드 시)
+- 모션그래픽(`Pillow` / `Hyperframes` / `Remotion`) — 로컬
 
 ## 자주 묻는 패턴
 
-### 사용자가 영상을 첨부하고 싶어할 때
+### 사용자가 영상을 지정할 때
 
-이 repo는 채팅 첨부 기능이 없습니다. 다음 중 하나를 안내:
+- 절대경로(Windows `C:\...`, macOS `/Users/...`)를 채팅에 알려주면 그 경로 그대로 처리
+- 이 레포 안의 `footage/` 폴더에 복사/드래그해 두어도 처리 가능
 
-- `cp /path/to/video.mp4 footage/` 로 복사
-- finder에서 `footage/` 폴더에 드래그
-- 절대경로를 채팅에 알려주면 그 경로 그대로 처리
+### 첫 Whisper 실행이 오래 걸릴 때
 
-### 사용자가 스크립트를 채팅에 붙여넣을 때
+`faster-whisper` 모델(medium ~1.5GB, large-v3 ~3GB) 첫 다운로드 중일 수 있다. 한 번 받으면 캐시되어 이후에는 빠르다.
 
-`footage/edit/segments.json`을 자동 생성. 보이스/rate/pitch는 사용자 요청에 맞게 추론. 한국어가 기본은 `ko-KR-SunHiNeural`.
+### 선택적 NLE 타임라인 내보내기
 
-### 첫 transcribe가 멈춘 것처럼 보일 때
-
-hyperframes Whisper large-v3 모델(~3GB) 첫 다운로드 중. 5–15분 정도 걸림. 진행 표시 없을 수 있음 — 사용자에게 미리 알려주기.
-
-### Mode A에서 EDL → FCPXML 만들기 전 source 영상 점검 (필수)
-
-FCP가 "각각의 미디어가 없는 유효하지 않은 편집입니다"를 뱉는 가장 흔한 3원인을 EDL 작성 **전**에 미리 회피한다:
-
-1. **NTSC frame rate 확인** — `ffprobe -show_entries stream=r_frame_rate <video>` → 30000/1001 / 24000/1001 / 60000/1001이면 EDL에 `fps_num`/`fps_den` 명시.
-
-2. **한글 경로 + timecode 동시 회피** — DJI/GoPro 같은 장비는 0이 아닌 timecode(`07:26:28;00` 등)를 박음. 그리고 macOS는 한글 파일명을 NFD로 저장. 두 문제를 한 번에:
-
-   ```bash
-   mkdir -p /tmp/bidiouse
-   ffmpeg -y -i footage/<원본>.MP4 -c copy -map_metadata -1 \
-     -timecode 00:00:00:00 /tmp/bidiouse/source.MP4
-   ```
-
-   이 사본의 절대경로를 EDL의 `sources[0].path`로 사용. stream copy라 영상 무손실, 1분 내.
-
-3. **그래도 거부되면 역공학** — 사용자에게 FCP에서 영상 직접 import → 컷 만들고 → File → Export XML → 그 XML을 받아 우리 출력과 diff. FCP 받아주는 정답 형식이 보임.
-
-자세한 트러블슈팅은 [USAGE.md](USAGE.md)의 "FCPXML 임포트 시..." 섹션.
-
-### 사용자가 자막 텍스트 수정을 요청할 때 (영구 워크플로우)
-
-자막은 hyperframes 인포그래픽 mov(영상)이라 텍스트 직접 수정 불가. **항상 SRT → 자동 재렌더 → 양 NLE 파일 동시 갱신** 흐름으로 처리한다. 우회 금지.
-
-**트리거 패턴**:
-
-- "자막 텍스트 수정해줘"
-- "5번 자막을 'XX'로 바꿔줘"
-- "자막에 오타 있어"
-- "자막 'YY' 부분 다시 만들어줘"
-
-**자동 흐름**:
-
-1. `footage/edit/subtitles.srt` 존재 확인. 없으면 먼저 export:
-   ```bash
-   ~/Developer/video-use/.venv/bin/python \
-     .claude/skills/motion-pipeline/helpers/subtitles_to_srt.py \
-     export footage/edit/subtitles.json -o footage/edit/subtitles.srt
-   ```
-2. 사용자 요청 반영해서 SRT 수정 (Edit/Write 도구로)
-3. `bash scripts/rerender_subtitles.sh` 실행 — 6단계 자동 (5–15분, 4K mov 렌더 포함)
-4. 완료되면 사용자에게 "NLE에서 timeline.{fcpxml|xml} 다시 import" 안내
-
-**렌더 없이 검증만**: `bash scripts/rerender_subtitles.sh --lint-only` (5초)
-
-**개별 helper 직접 호출 금지** — 항상 `rerender_subtitles.sh`를 진입점으로 (6단계 + 양 NLE export 보장).
-
-자세한 흐름은 [.claude/skills/motion-pipeline/SKILL.md](.claude/skills/motion-pipeline/SKILL.md)의 "자막 수정 워크플로우" 섹션.
-
-### NLE별 임포트 절차 (사용자 지원 시 안내)
-
-산출물 두 NLE 파일은 임포트 방식이 다르다. 사용자가 NLE를 명시하면 그쪽 가이드만:
-
-**Final Cut Pro**:
-
-- `파일 → 가져오기 → XML` → `footage/edit/timeline.fcpxml`
-- 컷 + 인포그래픽 자막 mov(V2) + caption track 모두 자동 포함
-- caption 편집: `타임라인 인덱스`(⌘⇧2) → "캡션" 탭 → 클릭으로 편집
-- FCP 11+에서는 `윈도우 → 작업공간에서 보기 → 캡션`이 별도 항목 없을 수 있음 → 타임라인 인덱스로
-
-**Premiere Pro**:
-
-- `파일 → 가져오기` → `footage/edit/timeline.xml`
-- 컷 + 인포그래픽 자막 mov(V2) 자동 포함
-- caption은 **별도 import 필요**: `Window → Captions` 패널 → 햄버거 메뉴 → Import → `footage/edit/subtitles.srt`
-- FCP7 XML 형식이 caption track 미지원 → Premiere에서는 SRT 별도 첨부
-
-### 자막 두 종류 동시 사용 (인포그래픽 + caption track 하이브리드)
-
-두 자막 트랙을 동시에 보존하면 사용자가 NLE 안에서 텍스트 편집 인터페이스 유지 + 인포그래픽 디자인도 유지:
-
-- **V2 overlay**: 인포그래픽 mov (디자인된 자막, 정중앙)
-- **Caption track / SRT**: NLE 자체 자막 (단순 텍스트, 하단 중앙, 편집 가능)
-
-EDL의 `overlays`(mov 16개) + `subtitles`(텍스트 51개) 둘 다 채우면 양쪽 다 들어감. 이미 `update_edl_overlays.py`와 `subtitles_to_srt.py`로 자동 처리.
-
-화면에 둘 다 보이는 게 부담스러우면 사용자가 NLE에서 V2 트랙 비활성화 또는 caption 트랙 비활성화로 선택 가능.
-
-## 외부 의존 (받는 사람이 사전 설치 필요)
-
-- macOS 권장 (M-series Apple Silicon이면 더 빠름). Linux도 동작.
-- Node 22+, Python 3.10+, uv, ffmpeg, git
-- Claude Code (또는 호환 에이전트)
-
-부족하면 setup.sh 실행 시 step 0에서 `missing: <도구>` 에러로 알려줌.
+기본 산출물은 `<영상 폴더>/edit/final.mp4`이지만, 사용자가 Final Cut Pro(`timeline.fcpxml`)나 Premiere Pro(`timeline.xml`) 타임라인 파일도 원하면 레포에 남아 있는 `scripts/export_nle_files.sh`와 `.claude/skills/motion-pipeline/helpers/edl_to_*.py`를 선택적으로 사용할 수 있다.
