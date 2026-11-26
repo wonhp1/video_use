@@ -61,7 +61,7 @@ ok "uv sync 완료"
 step "3. Edge TTS를 video-use venv에 추가 (Mode B 내레이션)"
 # ─────────────────────────────────────────────────────────────
 (cd "$VIDEO_USE_DIR" && \
-  uv pip install -r "$REPO_ROOT/.claude/skills/motion-pipeline/helpers/requirements.txt" >/dev/null)
+  uv pip install -r "$REPO_ROOT/.claude/skills/video-auto-edit/helpers/requirements.txt" >/dev/null)
 ok "edge-tts 설치 완료"
 
 # ─────────────────────────────────────────────────────────────
@@ -117,12 +117,12 @@ step "8. 동작 검증"
   || fail "edge-tts import 실패"
 
 "$VIDEO_USE_DIR/.venv/bin/python" \
-  "$REPO_ROOT/.claude/skills/motion-pipeline/helpers/batch_tts.py" --help >/dev/null \
+  "$REPO_ROOT/.claude/skills/video-auto-edit/helpers/batch_tts.py" --help >/dev/null \
   && ok "batch_tts.py 진입점 OK" \
   || fail "batch_tts.py 실행 실패"
 
 "$VIDEO_USE_DIR/.venv/bin/python" \
-  "$REPO_ROOT/.claude/skills/motion-pipeline/helpers/edl_to_fcpxml.py" --help >/dev/null \
+  "$REPO_ROOT/.claude/skills/video-auto-edit/helpers/edl_to_fcpxml.py" --help >/dev/null \
   && ok "edl_to_fcpxml.py 진입점 OK" \
   || fail "edl_to_fcpxml.py 실행 실패"
 

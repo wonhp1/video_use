@@ -1,5 +1,5 @@
 ---
-name: motion-pipeline
+name: video-auto-edit
 description: >-
   편집 프로그램(Premiere Pro, CapCut, Final Cut Pro) 없이 로컬 CLI 도구(ffmpeg, ffprobe,
   faster-whisper, yt-dlp, python3)와 3단계 자동 선택 모션그래픽(Python+ffmpeg / Hyperframes /
@@ -89,7 +89,7 @@ description: >-
 ### Step 4. 편집 실행 (`edit/edl.json` → `edit/final.mp4`)
 - 모든 편집 결정(남길 구간 `keep_ranges`, 오버레이, 자막, 효과)을 `edit/edl.json`에 기록한 뒤 `ffmpeg`로 실행한다.
 - **자막은 컷 완료 후 최종 타임라인 기준**으로 만든다(컷 전 기준이면 `output_time = word.start - seg_in + seg_offset`으로 정확히 변환하거나, 컷 완료된 영상의 오디오를 추출해 Whisper를 돌린다).
-- *(선택)* 사용자가 Final Cut Pro / Premiere Pro용 타임라인 파일(`timeline.fcpxml` / `timeline.xml`)을 요청하면 레포의 `scripts/export_nle_files.sh` 또는 `.claude/skills/motion-pipeline/helpers/edl_to_*.py`를 활용할 수 있다.
+- *(선택)* 사용자가 Final Cut Pro / Premiere Pro용 타임라인 파일(`timeline.fcpxml` / `timeline.xml`)을 요청하면 레포의 `scripts/export_nle_files.sh` 또는 `.claude/skills/video-auto-edit/helpers/edl_to_*.py`를 활용할 수 있다.
 
 ### Step 5. 필수 검증 ("에러 없음 ≠ 완료")
 결과를 보고하기 전에 아래 3가지를 반드시 직접 확인한다:

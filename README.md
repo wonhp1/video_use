@@ -18,7 +18,7 @@ Claude Code(또는 `AGENTS.md`를 읽는 에이전트)는 **따로 묻지 않습
 
 ## 편집 프로그램 없이 — 핵심 기능
 
-[`.claude/skills/motion-pipeline/SKILL.md`](.claude/skills/motion-pipeline/SKILL.md) 하나로 별도 외부 스킬·수동 셋업 없이 아래 전체를 처리합니다.
+[`.claude/skills/video-auto-edit/SKILL.md`](.claude/skills/video-auto-edit/SKILL.md) 하나로 별도 외부 스킬·수동 셋업 없이 아래 전체를 처리합니다.
 
 | 영역                       | 동작 방식                                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------------------- |
@@ -33,7 +33,7 @@ Claude Code(또는 `AGENTS.md`를 읽는 에이전트)는 **따로 묻지 않습
 
 ## 빠른 시작 (편집 프로그램 없이)
 
-별도의 `setup.sh` 실행 없이 이 레포를 열고(또는 `.claude/skills/motion-pipeline/SKILL.md`를 사용해) 바로 자연어로 요청하면 됩니다.
+별도의 `setup.sh` 실행 없이 이 레포를 열고(또는 `.claude/skills/video-auto-edit/SKILL.md`를 사용해) 바로 자연어로 요청하면 됩니다.
 
 - **기본 컷 + 자막**: `"C:\videos\talk.mp4 무음 잘라주고 한국어 자막 달아줘."`
 - **레퍼런스 스타일 적용**: `"footage/raw.mp4를 https://youtube.com/shorts/... 이 레퍼런스 컷 템포랑 자막·색감 스타일로 편집해줘."`
@@ -59,9 +59,9 @@ Claude Code(또는 `AGENTS.md`를 읽는 에이전트)는 **따로 묻지 않습
 
 | 에이전트                       | 자동 트리거 (자연어 요청)                                            | 수동 프롬프트 복붙 |
 | ------------------------------ | -------------------------------------------------------------------- | ------------------ |
-| **Claude Code**                | ✅ `CLAUDE.md` + `.claude/skills/motion-pipeline/SKILL.md` 자동 인식 | ✅                 |
+| **Claude Code**                | ✅ `CLAUDE.md` + `.claude/skills/video-auto-edit/SKILL.md` 자동 인식 | ✅                 |
 | **Codex / Cursor / Antigravity** | ✅ `AGENTS.md` (= `CLAUDE.md` 심볼릭) 자동 인식                      | ✅                 |
-| **그 외 CLI/코딩 에이전트**    | `.claude/skills/motion-pipeline/SKILL.md` 내용을 프롬프트로 붙여넣기 | ✅                 |
+| **그 외 CLI/코딩 에이전트**    | `.claude/skills/video-auto-edit/SKILL.md` 내용을 프롬프트로 붙여넣기 | ✅                 |
 
 ---
 
@@ -70,7 +70,7 @@ Claude Code(또는 `AGENTS.md`를 읽는 에이전트)는 **따로 묻지 않습
 ```
 .
 ├── .claude/skills/
-│   └── motion-pipeline/
+│   └── video-auto-edit/
 │       ├── SKILL.md            ← 편집 프로그램 없이 범용 영상편집 스킬 (Windows/macOS 호환)
 │       ├── helpers/            ← (선택/호환) NLE XML 변환 등 기존 보조 스크립트
 │       └── examples/edl.example.json

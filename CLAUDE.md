@@ -6,12 +6,12 @@
 
 | 갈래                                   | 위치                                             | 하는 일                                                                                |
 | -------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| **편집 프로그램 없이** (기본)          | `.claude/skills/motion-pipeline/SKILL.md`        | `ffmpeg` + `faster-whisper` + `yt-dlp` + 3단계 모션그래픽으로 `final.mp4` 직접 생성    |
+| **편집 프로그램 없이** (기본)          | `.claude/skills/video-auto-edit/SKILL.md`        | `ffmpeg` + `faster-whisper` + `yt-dlp` + 3단계 모션그래픽으로 `final.mp4` 직접 생성    |
 | **편집 프로그램 사용** (`nle-auto-edit`) | [`nle-auto-edit/`](nle-auto-edit/README.md)      | Claude가 Premiere / CapCut / Final Cut을 직접 조작해 그 안에서 편집                    |
 
 ## 어느 갈래로 갈지 — 묻지 않는다
 
-- **기본은 "편집 프로그램 없이"다.** "이 영상 편집해줘", "무음 잘라줘", "자막 달아줘", "이 레퍼런스처럼 편집해줘"처럼 프로그램을 말하지 않은 요청은 편집 프로그램을 쓸지 묻지 않고 `.claude/skills/motion-pipeline/SKILL.md` 절차로 처리한다.
+- **기본은 "편집 프로그램 없이"다.** "이 영상 편집해줘", "무음 잘라줘", "자막 달아줘", "이 레퍼런스처럼 편집해줘"처럼 프로그램을 말하지 않은 요청은 편집 프로그램을 쓸지 묻지 않고 `.claude/skills/video-auto-edit/SKILL.md` 절차로 처리한다.
 - **사용자가 프로그램 이름을 말할 때만** 편집 프로그램 갈래로 간다("프리미어로…", "캡컷 자막…", "파이널컷으로…"). 그 요청 하나만 그 프로그램으로 처리한다. 다음 요청에 이름이 없으면 다시 기본 갈래다. 이 갈래에서도 각 어댑터의 안전장치만 고정하고, 더 나은 최신 도구·편집 기법이 있으면 AI가 구식 절차에 얽매이지 않고 스스로 선택·제안한다.
 
 **편집 프로그램 갈래로 갈 때 (스킬이 아직 없으면):**
@@ -22,7 +22,7 @@
 
 ## 편집 프로그램 없이 갈래 — 핵심 원칙
 
-자세한 전체 절차와 규칙은 [`.claude/skills/motion-pipeline/SKILL.md`](.claude/skills/motion-pipeline/SKILL.md)가 정전(single source of truth)이다.
+자세한 전체 절차와 규칙은 [`.claude/skills/video-auto-edit/SKILL.md`](.claude/skills/video-auto-edit/SKILL.md)가 정전(single source of truth)이다.
 
 - **사전 셋업 불필요 (Windows / macOS / Linux 자동 설치)**: 별도 `setup.sh`나 외부 `~/Developer/video-use` 클론 없이, 에이전트가 작업 시작 시 `ffmpeg`, `Python 3`, 전용 가상환경(`~/.video-edit-venv`)의 `faster-whisper`(`av<16`), 그리고 필요 시 `yt-dlp` / 모션그래픽 도구를 자동 점검·설치한다.
 - **프롬프트에 얽매이지 않는 자율 판단**: 6개 Hard Rules(안전장치)만 필수이며, 나머지 수치·연출·구성은 영상 성격에 맞게 AI가 더 나은 방향으로 판단·제안한다.
@@ -61,4 +61,4 @@
 
 ### 선택적 NLE 타임라인 내보내기
 
-기본 산출물은 `<영상 폴더>/edit/final.mp4`이지만, 사용자가 Final Cut Pro(`timeline.fcpxml`)나 Premiere Pro(`timeline.xml`) 타임라인 파일도 원하면 레포에 남아 있는 `scripts/export_nle_files.sh`와 `.claude/skills/motion-pipeline/helpers/edl_to_*.py`를 선택적으로 사용할 수 있다.
+기본 산출물은 `<영상 폴더>/edit/final.mp4`이지만, 사용자가 Final Cut Pro(`timeline.fcpxml`)나 Premiere Pro(`timeline.xml`) 타임라인 파일도 원하면 레포에 남아 있는 `scripts/export_nle_files.sh`와 `.claude/skills/video-auto-edit/helpers/edl_to_*.py`를 선택적으로 사용할 수 있다.

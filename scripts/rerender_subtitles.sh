@@ -34,7 +34,7 @@ fail() { echo "✗ $*" >&2; exit 1; }
 if [ ! -f "$REPO/footage/edit/subtitles.srt" ]; then
   if [ -f "$REPO/footage/edit/subtitles.json" ]; then
     step "0. subtitles.srt 자동 export (subtitles.json → SRT)"
-    "$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/subtitles_to_srt.py" \
+    "$VENV" "$REPO/.claude/skills/video-auto-edit/helpers/subtitles_to_srt.py" \
       export "$REPO/footage/edit/subtitles.json" \
       -o "$REPO/footage/edit/subtitles.srt"
     ok "footage/edit/subtitles.srt 생성됨 — 편집 후 다시 실행하세요"
@@ -45,12 +45,12 @@ if [ ! -f "$REPO/footage/edit/subtitles.srt" ]; then
 fi
 
 step "1. SRT → subtitles.json"
-"$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/subtitles_to_srt.py" \
+"$VENV" "$REPO/.claude/skills/video-auto-edit/helpers/subtitles_to_srt.py" \
   import "$REPO/footage/edit/subtitles.srt" \
   -o "$REPO/footage/edit/subtitles.json"
 
 step "2. subtitles.json → hyperframes/index.html"
-"$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/build_subtitle_html.py" \
+"$VENV" "$REPO/.claude/skills/video-auto-edit/helpers/build_subtitle_html.py" \
   "$REPO/footage/edit/subtitles.json" \
   -o "$REPO/hyperframes/index.html"
 
@@ -70,13 +70,13 @@ mkdir -p "$REPO/hyperframes/renders"
 ok "$(ls -lh "$REPO/hyperframes/renders/subtitles.mov" | awk '{print $5}') hyperframes/renders/subtitles.mov"
 
 step "5. mov를 16개 cut 별로 분할"
-"$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/split_subtitles_by_cuts.py" \
+"$VENV" "$REPO/.claude/skills/video-auto-edit/helpers/split_subtitles_by_cuts.py" \
   "$REPO/footage/edit/edl.json" \
   "$REPO/hyperframes/renders/subtitles.mov" \
   -o "$REPO/hyperframes/renders/cuts"
 
 step "5. EDL overlays 갱신"
-"$VENV" "$REPO/.claude/skills/motion-pipeline/helpers/update_edl_overlays.py" \
+"$VENV" "$REPO/.claude/skills/video-auto-edit/helpers/update_edl_overlays.py" \
   "$REPO/footage/edit/edl.json" \
   "$REPO/hyperframes/renders/cuts"
 

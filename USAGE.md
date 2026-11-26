@@ -92,7 +92,7 @@ AI가 요청 난이도와 PC 환경을 보고 자동으로 선택합니다:
 ## 3. 자주 묻는 질문 & 트러블슈팅
 
 ### Q. 스킬 없이 다른 AI 채팅/에이전트에 프롬프트로만 쓰고 싶다면?
-[`.claude/skills/motion-pipeline/SKILL.md`](.claude/skills/motion-pipeline/SKILL.md)의 YAML 머리말(`--- ... ---`) 아래 본문을 그대로 복사해 시스템 프롬프트나 대화 첫 메시지로 붙여넣어 사용할 수 있습니다.
+[`.claude/skills/video-auto-edit/SKILL.md`](.claude/skills/video-auto-edit/SKILL.md)의 YAML 머리말(`--- ... ---`) 아래 본문을 그대로 복사해 시스템 프롬프트나 대화 첫 메시지로 붙여넣어 사용할 수 있습니다.
 
 ### Q. Windows에서 `ffmpeg` 설치 직후 인식이 안 됩니다
 `winget` 설치 직후 현재 터미널의 `PATH`가 갱신되지 않을 수 있습니다. 스킬이 자동으로 `%LOCALAPPDATA%\Microsoft\WinGet\Packages`·레지스트리 `PATH`를 재조회하지만, 그래도 안 잡히면 터미널을 한 번 닫고 다시 열어 주세요.
@@ -107,4 +107,4 @@ AI가 요청 난이도와 PC 환경을 보고 자동으로 선택합니다:
 스킬의 Step 1 사전 점검이 `00:00:00:00`이 아닌 타임코드와 한글/특수문자 경로를 감지해, OS 임시 폴더에 무손실(`-c copy`) 사본을 만들어 우회합니다.
 
 ### Q. 결과물을 Premiere Pro / Final Cut Pro 타임라인(XML)으로도 받고 싶다면?
-기본 산출물은 `<영상 폴더>/edit/final.mp4`이지만, 원할 경우 레포에 남아 있는 기존 헬퍼(`scripts/export_nle_files.sh`, `.claude/skills/motion-pipeline/helpers/edl_to_fcpxml.py`, `edl_to_fcp7_xml.py`)를 통해 `edl.json`에서 FCPXML/Premiere XML을 생성할 수 있습니다.
+기본 산출물은 `<영상 폴더>/edit/final.mp4`이지만, 원할 경우 레포에 남아 있는 기존 헬퍼(`scripts/export_nle_files.sh`, `.claude/skills/video-auto-edit/helpers/edl_to_fcpxml.py`, `edl_to_fcp7_xml.py`)를 통해 `edl.json`에서 FCPXML/Premiere XML을 생성할 수 있습니다.

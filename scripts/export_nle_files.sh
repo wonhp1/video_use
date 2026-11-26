@@ -18,7 +18,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV="$HOME/Developer/video-use/.venv/bin/python"
-HELPERS="$REPO/.claude/skills/motion-pipeline/helpers"
+HELPERS="$REPO/.claude/skills/video-auto-edit/helpers"
 
 EDL="${1:-$REPO/footage/edit/edl.json}"
 EDIT_DIR="$(dirname "$EDL")"

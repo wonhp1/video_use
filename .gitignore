@@ -10,7 +10,7 @@
 footage/*
 !footage/.gitkeep
 
-# video-use / motion-pipeline 중간 산출물
+# video-use / video-auto-edit 중간 산출물
 takes_packed.md
 project.md
 edit/
