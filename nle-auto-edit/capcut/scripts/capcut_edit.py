@@ -7,7 +7,7 @@
   3. 세그먼트와 material 은 짝이다. 한쪽만 고치면 캡컷이 전체를 리셋한다.
      (예: segment.speed 만 바꾸면 materials.speeds 와 충돌 → 되돌아감)
 """
-import json, os, glob, shutil, time, subprocess
+import json, os, glob, shutil, time, subprocess, tempfile
 
 import sys as _sys
 
@@ -87,10 +87,10 @@ def save(d, proj_dir, backup=True):
     guard()
     ms = _mirrors(proj_dir)
     if backup:
-        bak = f"/tmp/capcut_bak_{int(time.time())}"
+        bak = os.path.join(tempfile.gettempdir(), f"capcut_bak_{int(time.time())}")
         os.makedirs(bak, exist_ok=True)
         for m in ms:
-            shutil.copy2(m, os.path.join(bak, m.replace("/", "_")))
+            shutil.copy2(m, os.path.join(bak, m.replace(":", "").replace("\\", "_").replace("/", "_")))
         print(f"백업: {bak}")
     blob = json.dumps(d, ensure_ascii=False)
     for m in ms:
